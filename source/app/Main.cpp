@@ -42,6 +42,7 @@ struct Application final : yup::YUPApplication
         window = std::make_unique<MainWindow>();
         window->centreWithSize ({ 800, 600 });
         window->setVisible (true);
+        window->toFront (true);
     }
 
     void shutdown() override

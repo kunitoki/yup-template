@@ -21,7 +21,7 @@ class MainWindow final : public yup::DocumentWindow
 {
 public:
     MainWindow()
-        : font (yup::ApplicationTheme::getGlobalTheme()->getDefaultFont().withAxisValue ("slnt", -10.0f))
+        : font (yup::ApplicationTheme::getGlobalTheme()->getDefaultFont())
     {
         setTitle (YupApp_Name);
     }
@@ -29,7 +29,7 @@ public:
     //==============================================================================
     void paint (yup::Graphics& g) override
     {
-        g.setFillColor (0xff2a2a28);
+        g.setFillColor (0xff1d1f24);
         g.fillAll();
 
         g.setFillColor (yup::Colors::white);
