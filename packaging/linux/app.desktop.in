@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=@PRODUCT_NAME@
-Comment=@PLUGIN_DESCRIPTION@
-Exec=@PRODUCT_SLUG@
-Icon=@PRODUCT_SLUG@
+Name=@NAME@
+Comment=@DESCRIPTION@
+Exec=@EXEC@
+Icon=@ICON@
 Terminal=false
 Categories=AudioVideo;Audio;

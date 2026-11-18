@@ -1,7 +1,7 @@
 /*
   ==============================================================================
 
-   YUP Plugin Template - a simple polyphonic instrument.
+   YUP Template - a simple polyphonic instrument.
 
    This header holds the whole sound engine. It depends only on the C++ standard
    library, so it can be unit tested on its own, without the audio or GUI modules.

@@ -1,54 +1,82 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build a WebAssembly tarball (.tar.gz) containing the Emscripten standalone
-# application: the HTML shell plus every file Emscripten emits alongside it
-# (.js, .wasm, .data, worker scripts, source maps, ...) and the mini-coi.js
-# cross-origin-isolation helper.
+# Build a WebAssembly tarball (.tar.gz) containing every Emscripten application
+# that was built (the standalone application and the plugin's standalone
+# application). Each one is staged into its own "<name>/" folder with its HTML
+# shell, every file Emscripten emits alongside it (.js, .wasm, .data, worker
+# scripts, source maps, ...) and the mini-coi.js cross-origin-isolation helper.
+# The top-level index.html redirects to the application (or to the plugin's
+# standalone when the application was not built).
 #
-# Usage: packaging/wasm/build_archive.sh [CONFIG] [BUILD_DIR]
+# Usage: packaging/wasm/build_archive.sh [CONFIG] [BUILD_DIR (default: build/emscripten)]
 # =============================================================================
 set -euo pipefail
 
 CONFIG="${1:-${CONFIG:-Release}}"
 BUILD_DIR="${2:-${BUILD_DIR:-}}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-emscripten}"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/common.sh"
 
 mkdir -p "$DIST_DIR"
 
-# The Emscripten standalone emits "<product>.html" into the per-config output
-# directory. Locate it, skipping third-party bundles under externals/_deps.
-HTML="$(find "$BUILD_DIR" \
-    \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
-    -path "*/$CONFIG/*" -name '*.html' -type f -print 2>/dev/null | head -n1)"
-[[ -n "$HTML" ]] || die "No Emscripten .html output found under $BUILD_DIR for config $CONFIG. Build the WASM standalone first."
-
-OUT_DIR="$(dirname "$HTML")"
-STEM="$(basename "$HTML" .html)"
+# Every Emscripten application emits "<product>.html" into its per-config output
+# directory.
+HTMLS=()
+while IFS= read -r artifact; do
+    [[ -n "$artifact" ]] && HTMLS+=("$artifact")
+done < <(find_artifacts html)
+[[ ${#HTMLS[@]} -gt 0 ]] || die "No Emscripten .html output found under $BUILD_DIR for config $CONFIG. Build the WASM project first."
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 ROOT="$STAGE/$PRODUCT_SLUG-$VERSION"
 mkdir -p "$ROOT"
 
-log "Staging WebAssembly standalone \"$STEM\""
+ENTRY=""
+for HTML in "${HTMLS[@]}"; do
+    OUT_DIR="$(dirname "$HTML")"
+    STEM="$(basename "$HTML" .html)"
+    SLUG="$(slugify "$STEM")"
 
-# Copy every file that shares the HTML stem (.html/.js/.wasm/.data/.wasm.map and
-# the pthread / wasm-worker / audio-worklet helper scripts).
-shopt -s nullglob
-for f in "$OUT_DIR/$STEM".*; do
-    cp "$f" "$ROOT/"
+    log "Staging WebAssembly application \"$STEM\" -> $SLUG/"
+    mkdir -p "$ROOT/$SLUG"
+
+    # Copy every file that shares the HTML stem (.html/.js/.wasm/.data/.wasm.map
+    # and the pthread / wasm-worker / audio-worklet helper scripts).
+    shopt -s nullglob
+    for f in "$OUT_DIR/$STEM".*; do
+        [[ -f "$f" ]] || continue
+        cp "$f" "$ROOT/$SLUG/"
+    done
+    shopt -u nullglob
+
+    # The cross-origin-isolation shim required to serve the SharedArrayBuffer build.
+    if [[ -f "$OUT_DIR/mini-coi.js" ]]; then
+        cp "$OUT_DIR/mini-coi.js" "$ROOT/$SLUG/"
+    fi
+
+    # Expose each shell as index.html so every folder can be served as-is.
+    cp "$ROOT/$SLUG/$STEM.html" "$ROOT/$SLUG/index.html"
+
+    if [[ "$STEM" == "$APP_PRODUCT_NAME" || -z "$ENTRY" ]]; then
+        ENTRY="$SLUG"
+    fi
 done
-shopt -u nullglob
 
-# The cross-origin-isolation shim required to serve the SharedArrayBuffer build.
-if [[ -f "$OUT_DIR/mini-coi.js" ]]; then
-    cp "$OUT_DIR/mini-coi.js" "$ROOT/"
-fi
-
-# Expose the entry shell as index.html so the archive can be served as-is.
-if [[ -f "$ROOT/$STEM.html" ]]; then
-    cp "$ROOT/$STEM.html" "$ROOT/index.html"
-fi
+# The archive root redirects to the main entry point.
+cat > "$ROOT/index.html" <<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="0; url=$ENTRY/index.html">
+    <title>$PRODUCT_NAME</title>
+</head>
+<body>
+    <a href="$ENTRY/index.html">$PRODUCT_NAME</a>
+</body>
+</html>
+HTML
 
 [[ -f "$PROJECT_ROOT/LICENSE" ]] && cp "$PROJECT_ROOT/LICENSE" "$ROOT/LICENSE"
 

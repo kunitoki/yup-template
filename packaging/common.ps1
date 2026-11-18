@@ -26,26 +26,37 @@ function Get-ProjectValue([string]$Name) {
     return $match.Groups[1].Value
 }
 
-# The internal target name (see PROJECT_NAME in CMakeLists.txt).
+# The internal project name (see PROJECT_NAME in CMakeLists.txt).
 $ProjectName = Get-ProjectValue "PROJECT_NAME"
 
-# The user-facing product name (see PRODUCT_NAME in CMakeLists.txt).
+# The user-facing product name (see PRODUCT_NAME in CMakeLists.txt). It names
+# the installer that bundles the application and the plugin.
 $ProductName = Get-ProjectValue "PRODUCT_NAME"
+
+# Short descriptive text for the product (see PRODUCT_DESCRIPTION).
+$ProductDescription = Get-ProjectValue "PRODUCT_DESCRIPTION"
 
 # The vendor / author (see COMPANY_NAME in CMakeLists.txt).
 $CompanyName = Get-ProjectValue "COMPANY_NAME"
 
-# The reverse-domain bundle identifier prefix (see BUNDLE_ID in CMakeLists.txt).
+# The reverse-domain bundle identifier of the product (see BUNDLE_ID).
 $BundleId = Get-ProjectValue "BUNDLE_ID"
 
-# Short descriptive text (see PLUGIN_DESCRIPTION in CMakeLists.txt).
+# Website / support URL (see PRODUCT_URL in CMakeLists.txt).
+$ProductUrl = Get-ProjectValue "PRODUCT_URL"
+
+# Contact e-mail (see PRODUCT_EMAIL in CMakeLists.txt).
+$ProductEmail = Get-ProjectValue "PRODUCT_EMAIL"
+
+# The name of the standalone application executable (see APP_PRODUCT_NAME).
+$AppProductName = Get-ProjectValue "APP_PRODUCT_NAME"
+
+# The name of the plugin, also the name of its standalone executable (see
+# PLUGIN_PRODUCT_NAME).
+$PluginProductName = Get-ProjectValue "PLUGIN_PRODUCT_NAME"
+
+# Short descriptive text for the plugin (see PLUGIN_DESCRIPTION).
 $PluginDescription = Get-ProjectValue "PLUGIN_DESCRIPTION"
-
-# Website / support URL (see PLUGIN_URL in CMakeLists.txt).
-$PluginUrl = Get-ProjectValue "PLUGIN_URL"
-
-# Contact e-mail (see PLUGIN_EMAIL in CMakeLists.txt).
-$PluginEmail = Get-ProjectValue "PLUGIN_EMAIL"
 
 # Unique Inno Setup AppId (see INSTALLER_GUID in CMakeLists.txt).
 $InstallerGuid = Get-ProjectValue "INSTALLER_GUID"

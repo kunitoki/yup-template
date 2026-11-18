@@ -1,9 +1,9 @@
 /*
   ==============================================================================
 
-   YUP Plugin Template - TEST application.
+   YUP Template - TEST application.
 
-   This application runs the test suite for the YUP Plugin Template using
+   This application runs the test suite for the YUP Template using
    Google Test. Run this application with `just test` (or build the `*_tests`
    target with -DBUILD_TESTS=ON and execute it directly).
 

@@ -40,10 +40,10 @@ jobs:
           -DPLATFORM=${{ env.IOS_PLATFORM }} -B ${{ runner.workspace }}/build
 
     - name: Build Debug
-      run: cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}
+      run: cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}_all
 
     - name: Build Release
-      run: cmake --build ${{ runner.workspace }}/build --config Release --target ${{ env.PROJECT_NAME }}
+      run: cmake --build ${{ runner.workspace }}/build --config Release --target ${{ env.PROJECT_NAME }}_all
 
     - name: Package
       id: package

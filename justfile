@@ -2,6 +2,9 @@ alias c := clean
 
 gtest_filter := "*"
 
+# Default build/<platform> folder for the host (matches the generator recipes below).
+platform := if os() == "macos" { "mac" } else if os() == "linux" { "linux" } else if os() == "windows" { "win" } else { "ninja" }
+
 # Project / target name, read from CMakeLists.txt (the single source of truth).
 project := `sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1`
 
@@ -9,67 +12,66 @@ project := `sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[
 default:
   @just --list
 
-[confirm("Are you sure you want to clean the build folder? [y/N]")]
-[doc("clean project build artifacts")]
-clean:
-  rm -Rf build/*
-
-[doc("generate and open project using Ninja multi config")]
+# =============================================================================
+# CONFIGURE PER PLATFORM
+# =============================================================================
+[doc("generate project using Ninja multi config")]
 ninja PROFILING="OFF":
-  cmake -G "Ninja Multi-Config" -B build -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  cmake -G "Ninja Multi-Config" -B build/ninja -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
 
 [doc("generate and open project in macOS using Xcode")]
 mac PROFILING="OFF":
-  cmake -G Xcode -B build -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
-  -open build/{{project}}.xcodeproj
+  cmake -G Xcode -B build/mac -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  -open build/mac/{{project}}.xcodeproj
 
 [doc("generate and open project in Windows using Visual Studio")]
 win PROFILING="OFF":
-  cmake -G "Visual Studio 18 2026" -B build -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
-  -start build/{{project}}.slnx
+  cmake -G "Visual Studio 18 2026" -B build/win -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  -start build/win/{{project}}.slnx
 
 [doc("generate project in Linux using Ninja")]
 linux PROFILING="OFF":
-  @just ninja {{PROFILING}}
+  cmake -G "Ninja Multi-Config" -B build/linux -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
 
 [doc("generate and open project for iOS using Xcode")]
 [macos]
 ios PLATFORM="OS64":
-  cmake -G Xcode -B build -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}}
-  -open build/{{project}}.xcodeproj
+  cmake -G Xcode -B build/ios -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}}
+  -open build/ios/{{project}}.xcodeproj
 
 [doc("generate and open project for iOS Simulator macOS using Xcode")]
 [macos]
 ios_simulator PLATFORM="SIMULATORARM64":
-  @just ios {{PLATFORM}}
+  cmake -G Xcode -B build/ios_sim -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}}
+  -open build/ios_sim/{{project}}.xcodeproj
 
 [doc("generate and open project for Android using Android Studio (macos)")]
 [macos]
 android:
-  cmake -G Xcode -B build -DYUP_TARGET_ANDROID=ON
-  -open -a /Applications/Android\ Studio.app build/{{project}}
+  cmake -G Xcode -B build/android -DYUP_TARGET_ANDROID=ON
+  -open -a /Applications/Android\ Studio.app build/android
 
 [doc("generate and open project for Android using Android Studio (windows)")]
 [windows]
 android:
-  cmake -G "Visual Studio 18 2026" -B build -DYUP_TARGET_ANDROID=ON
-  -start "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe" build\\{{project}}
+  cmake -G "Visual Studio 18 2026" -B build/android -DYUP_TARGET_ANDROID=ON
+  -start "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe" build\\android
 
 [doc("generate and open project for Android using Android Studio (linux)")]
 [linux]
 android:
-  cmake -G "Unix Makefiles" -B build -DYUP_TARGET_ANDROID=ON
+  cmake -G "Unix Makefiles" -B build/android -DYUP_TARGET_ANDROID=ON
 
 [doc("generate and build project for WASM")]
 emscripten CONFIG="Debug":
   emcc -v
-  emcmake cmake -G "Ninja Multi-Config" -B build
-  cmake --build build --config {{CONFIG}}
+  emcmake cmake -G "Ninja Multi-Config" -B build/emscripten
+  cmake --build build/emscripten --config {{CONFIG}}
 
 [doc("run tests for WASM")]
 emscripten_test CONFIG="Debug":
   @just emscripten {{CONFIG}}
-  cd build/tests/{{CONFIG}} && node {{project}}_tests.js --gtest_filter={{gtest_filter}}
+  cd build/emscripten/tests/{{CONFIG}} && node {{project}}_tests.js --gtest_filter={{gtest_filter}}
 
 [doc("serve project for WASM")]
 emscripten_serve:
@@ -79,20 +81,37 @@ emscripten_serve:
 # BUILD / TEST / PACKAGE
 # =============================================================================
 
-[doc("build the plugin (all enabled formats)")]
-build CONFIG="Release":
-  cmake --build build --config {{CONFIG}} --target {{project}}
+[doc("build everything that is enabled (application + plugin formats)")]
+build PLATFORM=platform CONFIG="Release":
+  cmake --build build/{{PLATFORM}} --config {{CONFIG}} --target {{project}}_all
+
+[doc("build only the standalone application")]
+build-app PLATFORM=platform CONFIG="Release":
+  cmake --build build/{{PLATFORM}} --config {{CONFIG}} --target {{project}}_app
+
+[doc("build only the plugin (all enabled formats)")]
+build-plugin PLATFORM=platform CONFIG="Release":
+  cmake --build build/{{PLATFORM}} --config {{CONFIG}} --target {{project}}
 
 [doc("build and run the test suite")]
-test CONFIG="Debug":
-  cmake --build build --config {{CONFIG}} --target {{project}}_tests
-  ctest --test-dir build/tests -C {{CONFIG}} --output-on-failure
+test PLATFORM=platform CONFIG="Debug":
+  cmake --build build/{{PLATFORM}} --config {{CONFIG}} --target {{project}}_tests
+  GTEST_FILTER="{{gtest_filter}}" ctest --test-dir build/{{PLATFORM}}/tests -C {{CONFIG}} --output-on-failure
 
 [doc("build and run the DSP micro-benchmarks (google/benchmark)")]
 bench CONFIG="Release":
-  cmake -G "Ninja Multi-Config" -B build -DBUILD_BENCHMARKS=ON
-  cmake --build build --config {{CONFIG}} --target {{project}}_benchmarks
-  ./build/benchmarks/{{CONFIG}}/{{project}}_benchmarks
+  cmake -G "Ninja Multi-Config" -B build/bench -DBUILD_BENCHMARKS=ON
+  cmake --build build/bench --config {{CONFIG}} --target {{project}}_benchmarks
+  ./build/bench/{{CONFIG}}/{{project}}_benchmarks
+
+[confirm("Are you sure you want to clean the build folder? [y/N]")]
+[doc("clean project build artifacts for a specific platform")]
+clean PLATFORM="*":
+  rm -Rf build/{{PLATFORM}}
+
+# =============================================================================
+# PACKAGING
+# =============================================================================
 
 [doc("generate platform icons (.icns/.ico) from assets/app-icon.png")]
 icons:
@@ -100,23 +119,23 @@ icons:
 
 [doc("build a macOS installer package (.pkg)")]
 [macos]
-package CONFIG="Release":
-  ./packaging/macos/build_pkg.sh {{CONFIG}}
+package-macos CONFIG="Release":
+  ./packaging/macos/build_pkg.sh {{CONFIG}} build/mac
 
 [doc("build a Linux tarball and Debian package")]
 [linux]
-package CONFIG="Release":
-  ./packaging/linux/build_archive.sh {{CONFIG}}
-  ./packaging/linux/build_deb.sh {{CONFIG}}
+package-linux CONFIG="Release":
+  ./packaging/linux/build_archive.sh {{CONFIG}} build/linux
+  ./packaging/linux/build_deb.sh {{CONFIG}} build/linux
 
 [doc("build a Windows installer (requires Inno Setup)")]
 [windows]
-package CONFIG="Release":
-  pwsh packaging/windows/build_installer.ps1 -Config {{CONFIG}}
+package-win CONFIG="Release":
+  pwsh packaging/windows/build_installer.ps1 -Config {{CONFIG}} -BuildDir build/win
 
 [doc("archive the Emscripten WASM standalone build (.tar.gz)")]
 package-wasm CONFIG="Release":
-  ./packaging/wasm/build_archive.sh {{CONFIG}}
+  ./packaging/wasm/build_archive.sh {{CONFIG}} build/emscripten
 
 # =============================================================================
 # DEVELOPER TOOLING
@@ -129,4 +148,3 @@ format:
 [doc("check source formatting without modifying files")]
 format-check:
   find source tests -type f \( -name '*.h' -o -name '*.cpp' \) -print0 | xargs -0 clang-format --dry-run --Werror
-

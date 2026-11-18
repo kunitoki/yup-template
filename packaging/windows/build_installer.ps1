@@ -11,7 +11,7 @@
 #  empty installer. It mirrors the Linux/macOS packaging scripts.
 #
 #  Usage:
-#    pwsh packaging/windows/build_installer.ps1 [-Config Release] [-BuildDir ..\..\build]
+#    pwsh packaging/windows/build_installer.ps1 [-Config Release] [-BuildDir build\win]
 #
 #  Requires Inno Setup 6+ (iscc.exe on PATH, or set -Iscc).
 # =============================================================================
@@ -28,8 +28,10 @@ $Here        = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $Here "..\common.ps1")
 
 if ([string]::IsNullOrEmpty($BuildDir)) {
-    $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { Join-Path $ProjectRoot "build" }
+    # Every platform is generated into its own build\<platform> folder (see the justfile).
+    $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { Join-Path $ProjectRoot "build\win" }
 }
+$BuildDir = [System.IO.Path]::GetFullPath($BuildDir, (Get-Location).Path)
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
@@ -37,11 +39,12 @@ New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 # Locate built artifacts in the build tree, skipping third-party bundles under
 # externals/ and _deps/ and preferring the requested configuration directory.
 # -----------------------------------------------------------------------------
-function Find-Artifact([string]$Pattern) {
+function Find-Artifact([string]$Pattern, [bool]$AnyConfig = $false) {
     Get-ChildItem -Path $BuildDir -Recurse -Force -Filter $Pattern -ErrorAction SilentlyContinue |
         Where-Object {
             $_.FullName -notmatch '[\\/](externals|_deps)[\\/]' -and
-            $_.FullName -match "[\\/]$([regex]::Escape($Config))[\\/]"
+            $_.FullName -notmatch '\.aaxplugin[\\/]' -and
+            ($AnyConfig -or $_.FullName -match "[\\/]$([regex]::Escape($Config))[\\/]")
         } |
         Select-Object -First 1
 }
@@ -53,8 +56,8 @@ New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 $defines = @()
 $staged  = @()
 
-function Stage-Artifact([string]$Pattern, [string]$SubDir, [string]$Define, [string]$DestName = "") {
-    $item = Find-Artifact $Pattern
+function Stage-Artifact([string]$Pattern, [string]$SubDir, [string]$Define, [string]$DestName = "", [bool]$AnyConfig = $false) {
+    $item = Find-Artifact $Pattern $AnyConfig
     if ($null -eq $item) {
         Write-Host "warning: no artifact matching '$Pattern' for $Config; skipping."
         return
@@ -77,10 +80,14 @@ function Stage-Artifact([string]$Pattern, [string]$SubDir, [string]$Define, [str
 Stage-Artifact "*_vst3_plugin.vst3" "VST3"       "HaveVst3"
 Stage-Artifact "*_clap_plugin.clap" "CLAP"       "HaveClap"
 Stage-Artifact "*_lv2_plugin.lv2"   "LV2"        "HaveLv2"
-Stage-Artifact "$ProductName.exe"   "Standalone" "HaveStandalone" "$ProductName.exe"
+# AAX is a "<name>.aaxplugin\Contents\x64\<name>.aaxplugin" directory bundle
+# that YUP writes straight into the build folder, outside any <Config> folder.
+Stage-Artifact "*_aax_plugin.aaxplugin" "AAX"    "HaveAax" "" $true
+Stage-Artifact "$AppProductName.exe"    "App"        "HaveApp"        "$AppProductName.exe"
+Stage-Artifact "$PluginProductName.exe" "Standalone" "HaveStandalone" "$PluginProductName.exe"
 
 if ($staged.Count -eq 0) {
-    throw "No artifacts found under '$BuildDir' for config '$Config'. Build the plugin first (e.g. 'just build')."
+    throw "No artifacts found under '$BuildDir' for config '$Config'. Build the project first (e.g. 'just build')."
 }
 
 $Iss = Join-Path $Here "installer.iss"
@@ -93,8 +100,10 @@ $isccArgs = @(
     "/DMyAppProject=$ProjectName",
     "/DMyAppVersion=$Version",
     "/DMyCompany=$CompanyName",
-    "/DMyAppURL=$PluginUrl",
-    "/DMyAppDescription=$PluginDescription",
+    "/DMyAppURL=$ProductUrl",
+    "/DMyAppDescription=$ProductDescription",
+    "/DMyAppExeName=$AppProductName",
+    "/DMyPluginName=$PluginProductName",
     "/DStageDir=$Stage",
     "/DOutputDir=$DistDir",
     "/DIconFile=$(Join-Path $ProjectRoot 'assets\app-icon.ico')"

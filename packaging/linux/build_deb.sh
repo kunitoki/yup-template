@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build a Debian package (.deb) that installs every built plugin format plus the
-# standalone application system-wide.
+# Build a Debian package (.deb) that installs every built plugin format, the
+# standalone application and the plugin's standalone application system-wide.
 #
 #   VST3 -> /usr/lib/vst3        CLAP -> /usr/lib/clap
-#   LV2  -> /usr/lib/lv2         app  -> /usr/bin + .desktop entry
+#   LV2  -> /usr/lib/lv2         apps -> /usr/bin + one .desktop entry each
 #
-# Usage: packaging/linux/build_deb.sh [CONFIG] [BUILD_DIR]
+# Usage: packaging/linux/build_deb.sh [CONFIG] [BUILD_DIR (default: build/linux)]
 # Requires: dpkg-deb
 # =============================================================================
 set -euo pipefail
 
 CONFIG="${1:-${CONFIG:-Release}}"
 BUILD_DIR="${2:-${BUILD_DIR:-}}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-linux}"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/common.sh"
 
 command -v dpkg-deb >/dev/null || die "dpkg-deb not found (install the dpkg package)."
@@ -44,28 +45,35 @@ stage_bundle vst3 "usr/lib/vst3"
 stage_bundle clap "usr/lib/clap"
 stage_bundle lv2  "usr/lib/lv2"
 
-STANDALONE="$(find "$BUILD_DIR" \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
-    -path "*/$CONFIG/*" -name "${PROJECT_NAME}_standalone_plugin" -type f -print 2>/dev/null | head -n1)"
-if [[ -n "$STANDALONE" ]]; then
-    log "Staging standalone application"
-    mkdir -p "$STAGE/usr/bin"
-    cp "$STANDALONE" "$STAGE/usr/bin/$PKG_NAME"
-    chmod 755 "$STAGE/usr/bin/$PKG_NAME"
-
-    if [[ -f "$PROJECT_ROOT/assets/app-icon.png" ]]; then
-        mkdir -p "$STAGE/usr/share/icons/hicolor/512x512/apps"
-        cp "$PROJECT_ROOT/assets/app-icon.png" "$STAGE/usr/share/icons/hicolor/512x512/apps/$PKG_NAME.png"
-    fi
-
-    mkdir -p "$STAGE/usr/share/applications"
-    sed -e "s|@PRODUCT_NAME@|$PRODUCT_NAME|g" \
-        -e "s|@PRODUCT_SLUG@|$PKG_NAME|g" \
-        -e "s|@PLUGIN_DESCRIPTION@|$PLUGIN_DESCRIPTION|g" \
-        "$PACKAGING_DIR/linux/app.desktop.in" > "$STAGE/usr/share/applications/$PKG_NAME.desktop"
-    FOUND+=("standalone")
+if [[ -f "$PROJECT_ROOT/assets/app-icon.png" ]]; then
+    mkdir -p "$STAGE/usr/share/icons/hicolor/512x512/apps"
+    cp "$PROJECT_ROOT/assets/app-icon.png" "$STAGE/usr/share/icons/hicolor/512x512/apps/$PKG_NAME.png"
 fi
 
-[[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the plugin first."
+# The standalone executables on Linux are plain files named after their product
+# name; install them under a lowercase, hyphenated command name.
+stage_executable() {
+    local name="$1" description="$2" kind="$3"
+    local executable command
+    executable="$(find_executable "$name")"
+    if [[ -z "$executable" ]]; then
+        warn "No $kind executable '$name' found for $CONFIG; skipping."
+        return
+    fi
+    command="$(slugify "$name" | tr '[:upper:]' '[:lower:]')"
+    log "Staging $kind '$name' -> /usr/bin/$command"
+    mkdir -p "$STAGE/usr/bin"
+    cp "$executable" "$STAGE/usr/bin/$command"
+    chmod 755 "$STAGE/usr/bin/$command"
+    write_desktop_entry "$name" "$description" "$command" "$PKG_NAME" \
+        "$STAGE/usr/share/applications/$command.desktop"
+    FOUND+=("$kind")
+}
+
+stage_executable "$APP_PRODUCT_NAME"    "$PRODUCT_DESCRIPTION" "application"
+stage_executable "$PLUGIN_PRODUCT_NAME" "$PLUGIN_DESCRIPTION"  "plugin standalone"
+
+[[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the project first."
 
 # Control metadata.
 INSTALLED_KB="$(du -sk "$STAGE" | cut -f1)"
@@ -79,8 +87,9 @@ Architecture: $ARCH
 Maintainer: $COMPANY_NAME
 Installed-Size: $INSTALLED_KB
 Description: $PRODUCT_NAME
- $PLUGIN_DESCRIPTION
- Installs the VST3, CLAP and LV2 plugin formats and a standalone application.
+ $PRODUCT_DESCRIPTION
+ Installs the standalone application and the VST3, CLAP, LV2 and standalone
+ formats of the $PLUGIN_PRODUCT_NAME plugin.
 CONTROL
 
 OUTPUT="$DIST_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"

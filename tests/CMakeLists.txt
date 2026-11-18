@@ -45,9 +45,12 @@ list (APPEND target_app_modules
 
 if (NOT YUP_PLATFORM_EMSCRIPTEN)
     list (APPEND target_app_modules
-        yup::yup_gui
-        yup::yup_audio_processors
-        yup::yup_audio_gui)
+        yup::yup_gui)
+    if (BUILD_PLUGIN)
+        list (APPEND target_app_modules
+            yup::yup_audio_processors
+            yup::yup_audio_gui)
+    endif()
     list (APPEND target_gtest_modules
         GTest::gtest
         GTest::gmock)
@@ -72,7 +75,9 @@ yup_standalone_app (
     TARGET_APP_NAMESPACE "${target_company}"
     TARGET_CONSOLE ${target_console}
     DEFINITIONS
-        YupPlugin_Name="${PRODUCT_NAME}"
+        YupApp_Name="${APP_PRODUCT_NAME}"
+        YupApp_Version="${TARGET_VERSION}"
+        YupPlugin_Name="${PLUGIN_PRODUCT_NAME}"
         YUP_USE_CURL=0
         YUP_MODAL_LOOPS_PERMITTED=1
     PRELOAD_FILES
@@ -82,10 +87,12 @@ yup_standalone_app (
         ${target_gtest_modules})
 
 # ==== Setup test sources
+# The plugin tests only exist when the plugin is built; the DSP tests cover the
+# shared sound engine and build everywhere.
 file (GLOB test_sources "${CMAKE_CURRENT_LIST_DIR}/test_*.cpp")
 list (APPEND test_sources "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 
-if (YUP_PLATFORM_EMSCRIPTEN)
+if (YUP_PLATFORM_EMSCRIPTEN OR NOT BUILD_PLUGIN)
     list (REMOVE_ITEM test_sources
         "${CMAKE_CURRENT_LIST_DIR}/test_PluginProcessor.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/test_PluginEditor.cpp")
@@ -93,14 +100,16 @@ endif()
 
 target_include_directories (${target_name} PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}"
-    "${CMAKE_CURRENT_LIST_DIR}/../source")
+    "${CMAKE_CURRENT_LIST_DIR}/../source/app"
+    "${CMAKE_CURRENT_LIST_DIR}/../source/plugin"
+    "${CMAKE_CURRENT_LIST_DIR}/../source/shared")
 target_sources (${target_name} PRIVATE ${test_sources})
 source_group (TREE ${CMAKE_CURRENT_LIST_DIR}/ FILES ${test_sources})
 
-if (NOT YUP_PLATFORM_EMSCRIPTEN)
+if (NOT YUP_PLATFORM_EMSCRIPTEN AND BUILD_PLUGIN)
     set (plugin_impl_sources
-        "${CMAKE_CURRENT_LIST_DIR}/../source/PluginProcessor.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/../source/PluginEditor.cpp")
+        "${CMAKE_CURRENT_LIST_DIR}/../source/plugin/PluginProcessor.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../source/plugin/PluginEditor.cpp")
     target_sources (${target_name} PRIVATE ${plugin_impl_sources})
     source_group ("Source Files" FILES ${plugin_impl_sources})
 

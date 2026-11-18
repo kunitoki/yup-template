@@ -27,31 +27,51 @@ log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
-# The internal target name (see PROJECT_NAME in CMakeLists.txt).
+# The internal project name (see PROJECT_NAME in CMakeLists.txt).
 PROJECT_NAME="${PROJECT_NAME:-$(cmake_var PROJECT_NAME)}"
 
-# The user-facing product name (see PRODUCT_NAME in CMakeLists.txt). This is the
-# name of the generated standalone .app bundle.
+# The user-facing product name (see PRODUCT_NAME in CMakeLists.txt). It names
+# the installers and archives that bundle the application and the plugin.
 PRODUCT_NAME="${PRODUCT_NAME:-$(cmake_var PRODUCT_NAME)}"
+
+# Short descriptive text for the product (see PRODUCT_DESCRIPTION).
+PRODUCT_DESCRIPTION="${PRODUCT_DESCRIPTION:-$(cmake_var PRODUCT_DESCRIPTION)}"
+
+# Short descriptive text for the plugin (see PLUGIN_DESCRIPTION).
+PLUGIN_DESCRIPTION="${PLUGIN_DESCRIPTION:-$(cmake_var PLUGIN_DESCRIPTION)}"
 
 # The vendor / author (see COMPANY_NAME in CMakeLists.txt).
 COMPANY_NAME="${COMPANY_NAME:-$(cmake_var COMPANY_NAME)}"
 
-# The reverse-domain bundle identifier prefix (see BUNDLE_ID in CMakeLists.txt).
+# The reverse-domain bundle identifier of the product (see BUNDLE_ID).
 BUNDLE_ID="${BUNDLE_ID:-$(cmake_var BUNDLE_ID)}"
 
-# Short descriptive text (see PLUGIN_DESCRIPTION in CMakeLists.txt).
-PLUGIN_DESCRIPTION="${PLUGIN_DESCRIPTION:-$(cmake_var PLUGIN_DESCRIPTION)}"
+# Website / support URL (see PRODUCT_URL in CMakeLists.txt).
+PRODUCT_URL="${PRODUCT_URL:-$(cmake_var PRODUCT_URL)}"
 
-# Website / support URL (see PLUGIN_URL in CMakeLists.txt).
-PLUGIN_URL="${PLUGIN_URL:-$(cmake_var PLUGIN_URL)}"
+# Contact e-mail (see PRODUCT_EMAIL in CMakeLists.txt).
+PRODUCT_EMAIL="${PRODUCT_EMAIL:-$(cmake_var PRODUCT_EMAIL)}"
 
-# Contact e-mail (see PLUGIN_EMAIL in CMakeLists.txt).
-PLUGIN_EMAIL="${PLUGIN_EMAIL:-$(cmake_var PLUGIN_EMAIL)}"
+# The name of the standalone application (see APP_PRODUCT_NAME). This is the
+# name of the generated executable / .app bundle of the application target.
+APP_PRODUCT_NAME="${APP_PRODUCT_NAME:-$(cmake_var APP_PRODUCT_NAME)}"
 
-# Build configuration and directory.
+# The name of the plugin (see PLUGIN_PRODUCT_NAME). It is also the name of the
+# standalone application shipped with the plugin formats.
+PLUGIN_PRODUCT_NAME="${PLUGIN_PRODUCT_NAME:-$(cmake_var PLUGIN_PRODUCT_NAME)}"
+
+# The CMake target names of the two products (see CMakeLists.txt).
+APP_TARGET="${APP_TARGET:-${PROJECT_NAME}_app}"
+PLUGIN_TARGET="${PLUGIN_TARGET:-$PROJECT_NAME}"
+
+# Build configuration and directory. Every platform is generated into its own
+# build/<platform> folder (see the justfile): each packaging script sets the
+# BUILD_PLATFORM default that matches it before sourcing this file.
 CONFIG="${CONFIG:-Release}"
-BUILD_DIR="${BUILD_DIR:-$PROJECT_ROOT/build}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-}"
+BUILD_DIR="${BUILD_DIR:-$PROJECT_ROOT/build/$BUILD_PLATFORM}"
+[[ "$BUILD_DIR" == /* ]] || BUILD_DIR="$PWD/$BUILD_DIR"
+BUILD_DIR="${BUILD_DIR%/}"
 
 # Output directory for the finished installers / archives.
 DIST_DIR="${DIST_DIR:-$PROJECT_ROOT/dist}"
@@ -62,16 +82,53 @@ VERSION="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
 # A filesystem-friendly product slug (no spaces).
 PRODUCT_SLUG="${PRODUCT_NAME// /-}"
 
-# Find the first bundle/file with the given extension produced by the build.
-# Searches the common config directory as well as the VST3-specific subtree,
-# skipping third-party bundles under externals/ and the test/benchmark runners
-# (e.g. "<project>_tests.app") which must never be shipped in a package.
-# Usage: find_artifact <extension>
-find_artifact() {
+# Find every bundle/file with the given extension produced by the build, one per
+# line. Searches the common config directory as well as the VST3-specific
+# subtree, skipping third-party bundles under externals/ and the test/benchmark
+# runners (e.g. "<project>_tests.app") which must never be shipped in a package,
+# as well as anything nested inside another bundle. Both the application and the standalone plugin produce a ".app" bundle, so the
+# packaging scripts stage every match rather than just the first one.
+# Usage: find_artifacts <extension>
+find_artifacts() {
     local ext="$1"
     { find "$BUILD_DIR" \
         \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
         -path "*/$CONFIG/*" -name "*.$ext" -print 2>/dev/null \
         | grep -Ev '(\.dSYM|_tests\.|_benchmarks\.)' \
+        | grep -Ev '\.(app|appex|vst3|clap|component|lv2|aaxplugin)/' \
+        | sort; } || true
+}
+
+# Find the first bundle/file with the given extension produced by the build.
+# Usage: find_artifact <extension>
+find_artifact() {
+    find_artifacts "$1" | head -n 1
+}
+
+# Find an executable produced by the build for the given file name (no extension
+# on Linux, ".exe" on Windows). Usage: find_executable <name>
+find_executable() {
+    local name="$1"
+    { find "$BUILD_DIR" \
+        \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
+        -path "*/$CONFIG/*" -name "$name" -type f -print 2>/dev/null \
         | head -n 1; } || true
+}
+
+# A filesystem-friendly slug (no spaces) for an arbitrary name.
+# Usage: slugify <name>
+slugify() {
+    printf '%s' "${1// /-}"
+}
+
+# Render a freedesktop.org .desktop entry from packaging/linux/app.desktop.in.
+# Usage: write_desktop_entry <name> <description> <exec> <icon> <output-file>
+write_desktop_entry() {
+    local name="$1" description="$2" exec="$3" icon="$4" output="$5"
+    mkdir -p "$(dirname "$output")"
+    sed -e "s|@NAME@|$name|g" \
+        -e "s|@DESCRIPTION@|$description|g" \
+        -e "s|@EXEC@|$exec|g" \
+        -e "s|@ICON@|$icon|g" \
+        "$PACKAGING_DIR/linux/app.desktop.in" > "$output"
 }

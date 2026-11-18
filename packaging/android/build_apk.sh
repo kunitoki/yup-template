@@ -8,7 +8,7 @@
 # under "<build>/app/build/outputs/apk/<buildType>/". Without a signing config
 # the release variant is the unsigned "app-release-unsigned.apk".
 #
-# Usage: packaging/android/build_apk.sh [CONFIG] [BUILD_DIR]
+# Usage: packaging/android/build_apk.sh [CONFIG] [BUILD_DIR (default: build/android)]
 #   CONFIG     Release (default) or Debug - selects the Gradle build variant.
 #   BUILD_DIR  The CMake build directory that contains the Gradle project.
 # =============================================================================
@@ -16,6 +16,7 @@ set -euo pipefail
 
 CONFIG="${1:-${CONFIG:-Release}}"
 BUILD_DIR="${2:-${BUILD_DIR:-}}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-android}"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/common.sh"
 
 mkdir -p "$DIST_DIR"

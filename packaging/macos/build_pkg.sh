@@ -2,12 +2,14 @@
 # =============================================================================
 # Build a macOS installer package (.pkg).
 #
-# Collects every plugin format that was built (VST3, CLAP, AU component, LV2)
-# plus the standalone .app and produces a single signed-or-unsigned installer
-# that drops each artifact into its standard macOS install location.
+# Collects every plugin format that was built (VST3, CLAP, AU component, LV2,
+# AAX)
+# plus every .app bundle (the standalone application and the plugin's standalone
+# application) and produces a single signed-or-unsigned installer that drops
+# each artifact into its standard macOS install location.
 #
 # Usage:
-#   packaging/macos/build_pkg.sh [CONFIG] [BUILD_DIR]
+#   packaging/macos/build_pkg.sh [CONFIG] [BUILD_DIR (default: build/mac)]
 #
 # Environment overrides: PRODUCT_NAME, COMPANY_NAME, BUNDLE_ID, DIST_DIR,
 #   INSTALLER_SIGNING_IDENTITY (a "Developer ID Installer: ..." identity),
@@ -24,6 +26,7 @@ set -euo pipefail
 
 CONFIG="${1:-${CONFIG:-Release}}"
 BUILD_DIR="${2:-${BUILD_DIR:-}}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-mac}"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/common.sh"
 
 [[ "$(uname -s)" == "Darwin" ]] || die "macOS packaging must run on macOS."
@@ -43,15 +46,18 @@ declare -a FOUND=()
 
 stage_bundle() {
     local ext="$1" dest="$2"
-    local artifact
-    artifact="$(find_artifact "$ext")"
-    if [[ -z "$artifact" ]]; then
+    local artifact staged=0
+    while IFS= read -r artifact; do
+        [[ -n "$artifact" ]] || continue
+        log "Staging $(basename "$artifact") -> $dest"
+        mkdir -p "$STAGE/$dest"
+        cp -R "$artifact" "$STAGE/$dest/"
+        staged=1
+    done < <(find_artifacts "$ext")
+    if [[ $staged -eq 0 ]]; then
         warn "No .$ext artifact found for $CONFIG; skipping."
         return
     fi
-    log "Staging $(basename "$artifact") -> $dest"
-    mkdir -p "$STAGE/$dest"
-    cp -R "$artifact" "$STAGE/$dest/"
     FOUND+=("$ext")
 }
 
@@ -59,9 +65,10 @@ stage_bundle vst3      "Library/Audio/Plug-Ins/VST3"
 stage_bundle clap      "Library/Audio/Plug-Ins/CLAP"
 stage_bundle component "Library/Audio/Plug-Ins/Components"
 stage_bundle lv2       "Library/Audio/Plug-Ins/LV2"
+stage_bundle aaxplugin "Library/Application Support/Avid/Audio/Plug-Ins"
 stage_bundle app       "Applications"
 
-[[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the plugin first."
+[[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the project first."
 
 # -----------------------------------------------------------------------------
 # Codesign the staged bundles with the hardened runtime (Developer ID
@@ -76,7 +83,7 @@ if [[ -n "${APPLICATION_SIGNING_IDENTITY:-}" ]]; then
         codesign --force --timestamp --options runtime \
             --sign "$APPLICATION_SIGNING_IDENTITY" "$bundle"
     done < <(find "$STAGE" \( -name '*.vst3' -o -name '*.clap' -o -name '*.component' \
-        -o -name '*.lv2' -o -name '*.app' \) -maxdepth 3 -print0)
+        -o -name '*.lv2' -o -name '*.aaxplugin' -o -name '*.app' \) -print0 -prune)
 else
     log "No APPLICATION_SIGNING_IDENTITY set; leaving bundles unsigned."
 fi

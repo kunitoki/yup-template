@@ -1,7 +1,7 @@
 /*
   ==============================================================================
 
-   YUP Plugin Template - shared test helpers.
+   YUP Template - shared test helpers.
 
    Small, header-only utilities shared by the plugin tests: block analysis
    helpers, a one-call processing wrapper, and factories that hand back a

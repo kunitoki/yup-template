@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build a Linux tarball (.tar.gz) containing every built plugin format plus the
-# standalone application and a .desktop entry.
+# Build a Linux tarball (.tar.gz) containing every built plugin format, the
+# standalone application and the plugin's standalone application, each of the
+# two executables with its own .desktop entry.
 #
-# Usage: packaging/linux/build_archive.sh [CONFIG] [BUILD_DIR]
+# Usage: packaging/linux/build_archive.sh [CONFIG] [BUILD_DIR (default: build/linux)]
 # =============================================================================
 set -euo pipefail
 
 CONFIG="${1:-${CONFIG:-Release}}"
 BUILD_DIR="${2:-${BUILD_DIR:-}}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-linux}"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/common.sh"
 
 STAGE="$(mktemp -d)"
@@ -37,29 +39,35 @@ stage_bundle vst3 "vst3"
 stage_bundle clap "clap"
 stage_bundle lv2  "lv2"
 
-# The standalone application on Linux is a plain executable (no bundle).
-STANDALONE="$(find "$BUILD_DIR" \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
-    -path "*/$CONFIG/*" -name "${PROJECT_NAME}_standalone_plugin" -type f -print 2>/dev/null | head -n1)"
-if [[ -n "$STANDALONE" ]]; then
-    log "Staging standalone application"
-    mkdir -p "$ROOT/bin"
-    cp "$STANDALONE" "$ROOT/bin/$PRODUCT_SLUG"
-    FOUND+=("standalone")
-fi
-
-[[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the plugin first."
-
-# Desktop entry + icon for the standalone app.
+# The standalone executables on Linux are plain files (no bundle), named after
+# their product name. Each one gets a launcher-friendly slug and a .desktop entry.
 if [[ -f "$PROJECT_ROOT/assets/app-icon.png" ]]; then
     mkdir -p "$ROOT/share/icons"
     cp "$PROJECT_ROOT/assets/app-icon.png" "$ROOT/share/icons/$PRODUCT_SLUG.png"
 fi
 
-mkdir -p "$ROOT/share/applications"
-sed -e "s|@PRODUCT_NAME@|$PRODUCT_NAME|g" \
-    -e "s|@PRODUCT_SLUG@|$PRODUCT_SLUG|g" \
-    -e "s|@PLUGIN_DESCRIPTION@|$PLUGIN_DESCRIPTION|g" \
-    "$PACKAGING_DIR/linux/app.desktop.in" > "$ROOT/share/applications/$PRODUCT_SLUG.desktop"
+stage_executable() {
+    local name="$1" description="$2" kind="$3"
+    local executable slug
+    executable="$(find_executable "$name")"
+    if [[ -z "$executable" ]]; then
+        warn "No $kind executable '$name' found for $CONFIG; skipping."
+        return
+    fi
+    slug="$(slugify "$name")"
+    log "Staging $kind '$name' -> bin/$slug"
+    mkdir -p "$ROOT/bin"
+    cp "$executable" "$ROOT/bin/$slug"
+    chmod 755 "$ROOT/bin/$slug"
+    write_desktop_entry "$name" "$description" "$slug" "$PRODUCT_SLUG" \
+        "$ROOT/share/applications/$slug.desktop"
+    FOUND+=("$kind")
+}
+
+stage_executable "$APP_PRODUCT_NAME"    "$PRODUCT_DESCRIPTION" "application"
+stage_executable "$PLUGIN_PRODUCT_NAME" "$PLUGIN_DESCRIPTION"  "plugin standalone"
+
+[[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the project first."
 
 [[ -f "$PROJECT_ROOT/LICENSE" ]] && cp "$PROJECT_ROOT/LICENSE" "$ROOT/LICENSE"
 

@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.31)
 # =============================================================================
 # DSP micro-benchmarks (google/benchmark).
 #
-# The sound engine (source/dsp) is header-only and depends only on the C++
-# standard library, so the benchmark executable needs no YUP modules - just
+# The sound engine (source/shared/dsp) is header-only and depends only on the
+# C++ standard library, so the benchmark executable needs no YUP modules - just
 # google/benchmark. Enable with -DBUILD_BENCHMARKS=ON (off by default) and run
 # the resulting `${PROJECT_NAME}_benchmarks` target, or use `just bench`.
 # =============================================================================
@@ -30,7 +30,7 @@ list (APPEND benchmark_sources "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 
 add_executable (${target_name} ${benchmark_sources})
 
-target_include_directories (${target_name} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../source")
+target_include_directories (${target_name} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../source/shared")
 target_link_libraries (${target_name} PRIVATE benchmark::benchmark)
 
 source_group (TREE ${CMAKE_CURRENT_LIST_DIR}/ FILES ${benchmark_sources})

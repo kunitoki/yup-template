@@ -46,10 +46,10 @@ jobs:
       run: cmake ${{ github.workspace }} -B ${{ runner.workspace }}/build
 
     - name: Build Debug
-      run: cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}
+      run: cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}_all
 
     - name: Build Release
-      run: cmake --build ${{ runner.workspace }}/build --config Release --target ${{ env.PROJECT_NAME }}
+      run: cmake --build ${{ runner.workspace }}/build --config Release --target ${{ env.PROJECT_NAME }}_all
 
     - name: Install Inno Setup
       run: choco install innosetup --no-progress -y
