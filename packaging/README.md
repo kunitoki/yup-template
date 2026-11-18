@@ -1,12 +1,13 @@
 # Packaging
 
 Scripts that collect the built plugin artifacts into native installers. Build the plugin first
-(`just build` or `cmake --build build --config Release --target YupPlugin`), then run the packaging
+(`just build` or `cmake --build build --config Release --target <PROJECT_NAME>`), then run the packaging
 recipe for your platform. All installers are written to the top-level `dist/` directory.
 
 ```
 packaging/
 ├── common.sh                 # Shared config + artifact discovery (sourced by the *.sh scripts)
+├── common.ps1                # Shared config for the PowerShell scripts (Windows)
 ├── icons/generate_icons.sh   # Generate app-icon.icns / app-icon.ico from assets/app-icon.png
 ├── macos/build_pkg.sh        # Build a macOS .pkg installer
 ├── linux/build_archive.sh    # Build a Linux .tar.gz
@@ -67,8 +68,13 @@ included. Missing formats are skipped with a warning.
 
 ## Customisation & overrides
 
-Product naming defaults mirror `CMakeLists.txt` (`PROJECT_NAME`, `PRODUCT_NAME`, `COMPANY_NAME`,
-`BUNDLE_ID`). Override any value, plus the build/output locations, via environment variables:
+Product naming is **inherited from `CMakeLists.txt`** — `common.sh` (bash) and `common.ps1`
+(PowerShell) parse the project configuration block for `PROJECT_NAME`, `PRODUCT_NAME`,
+`COMPANY_NAME`, `BUNDLE_ID`, `PLUGIN_DESCRIPTION`, `PLUGIN_URL` and `PLUGIN_EMAIL`, and the version
+comes from the `VERSION` file. Nothing has to be kept in sync by hand: rename your plugin in CMake
+and every installer follows.
+
+Override any value, plus the build/output locations, via environment variables:
 
 ```bash
 PRODUCT_NAME="My Synth" BUILD_DIR=/path/to/build DIST_DIR=/tmp/out \
@@ -101,7 +107,7 @@ In CI (`.github/workflows/build_macos.yml`) set these repository secrets to enab
 
 #### Windows
 
-Generate your own `AppId` GUID in `windows/installer.iss` for a real product. CI
+Generate your own `INSTALLER_GUID` in `CMakeLists.txt` for a real product. CI
 (`.github/workflows/build_windows.yml`) signs the installer with
 [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/) when these repository
 secrets are set: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`,

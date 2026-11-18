@@ -2,6 +2,9 @@ alias c := clean
 
 gtest_filter := "*"
 
+# Project / target name, read from CMakeLists.txt (the single source of truth).
+project := `sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1`
+
 [doc("list available recipes")]
 default:
   @just --list
@@ -18,12 +21,12 @@ ninja PROFILING="OFF":
 [doc("generate and open project in macOS using Xcode")]
 mac PROFILING="OFF":
   cmake -G Xcode -B build -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
-  -open build/YupPlugin.xcodeproj
+  -open build/{{project}}.xcodeproj
 
 [doc("generate and open project in Windows using Visual Studio")]
 win PROFILING="OFF":
   cmake -G "Visual Studio 18 2026" -B build -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
-  -start build/YupPlugin.slnx
+  -start build/{{project}}.slnx
 
 [doc("generate project in Linux using Ninja")]
 linux PROFILING="OFF":
@@ -33,7 +36,7 @@ linux PROFILING="OFF":
 [macos]
 ios PLATFORM="OS64":
   cmake -G Xcode -B build -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}}
-  -open build/YupPlugin.xcodeproj
+  -open build/{{project}}.xcodeproj
 
 [doc("generate and open project for iOS Simulator macOS using Xcode")]
 [macos]
@@ -44,13 +47,13 @@ ios_simulator PLATFORM="SIMULATORARM64":
 [macos]
 android:
   cmake -G Xcode -B build -DYUP_TARGET_ANDROID=ON
-  -open -a /Applications/Android\ Studio.app build/YupPlugin
+  -open -a /Applications/Android\ Studio.app build/{{project}}
 
 [doc("generate and open project for Android using Android Studio (windows)")]
 [windows]
 android:
   cmake -G "Visual Studio 18 2026" -B build -DYUP_TARGET_ANDROID=ON
-  -start "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe" build\\YupPlugin
+  -start "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe" build\\{{project}}
 
 [doc("generate and open project for Android using Android Studio (linux)")]
 [linux]
@@ -66,7 +69,7 @@ emscripten CONFIG="Debug":
 [doc("run tests for WASM")]
 emscripten_test CONFIG="Debug":
   @just emscripten {{CONFIG}}
-  cd build/tests/{{CONFIG}} && node YupPlugin_tests.js --gtest_filter={{gtest_filter}}
+  cd build/tests/{{CONFIG}} && node {{project}}_tests.js --gtest_filter={{gtest_filter}}
 
 [doc("serve project for WASM")]
 emscripten_serve:
@@ -78,18 +81,18 @@ emscripten_serve:
 
 [doc("build the plugin (all enabled formats)")]
 build CONFIG="Release":
-  cmake --build build --config {{CONFIG}} --target YupPlugin
+  cmake --build build --config {{CONFIG}} --target {{project}}
 
 [doc("build and run the test suite")]
 test CONFIG="Debug":
-  cmake --build build --config {{CONFIG}} --target YupPlugin_tests
+  cmake --build build --config {{CONFIG}} --target {{project}}_tests
   ctest --test-dir build/tests -C {{CONFIG}} --output-on-failure
 
 [doc("build and run the DSP micro-benchmarks (google/benchmark)")]
 bench CONFIG="Release":
   cmake -G "Ninja Multi-Config" -B build -DBUILD_BENCHMARKS=ON
-  cmake --build build --config {{CONFIG}} --target YupPlugin_benchmarks
-  ./build/benchmarks/{{CONFIG}}/YupPlugin_benchmarks
+  cmake --build build --config {{CONFIG}} --target {{project}}_benchmarks
+  ./build/benchmarks/{{CONFIG}}/{{project}}_benchmarks
 
 [doc("generate platform icons (.icns/.ico) from assets/app-icon.png")]
 icons:
@@ -116,12 +119,8 @@ package-wasm CONFIG="Release":
   ./packaging/wasm/build_archive.sh {{CONFIG}}
 
 # =============================================================================
-# TEMPLATE / DEVELOPER TOOLING
+# DEVELOPER TOOLING
 # =============================================================================
-
-[doc("rename the template for your own plugin (interactive)")]
-bootstrap:
-  ./scripts/bootstrap.sh
 
 [doc("format all source files with clang-format")]
 format:

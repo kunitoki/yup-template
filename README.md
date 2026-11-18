@@ -85,7 +85,7 @@ Using CMake directly:
 
 ```bash
 cmake -G "Ninja Multi-Config" -B build
-cmake --build build --config Release --target YupPlugin
+cmake --build build --config Release --target <PROJECT_NAME>
 ```
 
 Built artifacts land under `build/<Config>/` (VST3 under `build/VST3/<Config>/`). On macOS the plugins
@@ -101,7 +101,7 @@ just test Release    # ...in a specific configuration
 Or directly:
 
 ```bash
-cmake --build build --config Debug --target YupPlugin_tests
+cmake --build build --config Debug --target <PROJECT_NAME>_tests
 ctest --test-dir build/tests -C Debug --output-on-failure
 ```
 
@@ -128,7 +128,9 @@ signing options and layout.
 
 ## Configuration
 
-Edit the variables near the top of `CMakeLists.txt` to make the template your own:
+Edit the variables near the top of `CMakeLists.txt` to make the template your own. This is the
+**only** place you need to touch: the plugin sources (via the `YupPlugin_Name` / `YupPlugin_*`
+macros), the `justfile`, the CI workflows and the packaging scripts all read these values from here.
 
 | Variable | Description |
 |----------|-------------|
@@ -138,6 +140,7 @@ Edit the variables near the top of `CMakeLists.txt` to make the template your ow
 | `BUNDLE_ID` | Reverse-domain bundle identifier |
 | `PLUGIN_CODE` / `PLUGIN_MANUFACTURER_CODE` | Four-character AU/AAX codes (stable once shipped) |
 | `PLUGIN_DESCRIPTION` / `PLUGIN_URL` / `PLUGIN_EMAIL` | Plugin metadata |
+| `INSTALLER_GUID` | Windows installer AppId - generate your own (`powershell [guid]::NewGuid()`) and keep it stable |
 
 The version lives in the `VERSION` file (`MAJOR.MINOR.PATCH`) and can be overridden with
 `-DTARGET_VERSION=...`.

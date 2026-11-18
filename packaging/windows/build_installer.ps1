@@ -1,10 +1,10 @@
 # =============================================================================
 #  Build the Windows installer with Inno Setup (ISCC).
 #
-#  Reads the version from the VERSION file and the product naming from the
-#  values below (keep them in sync with CMakeLists.txt), locates the built
-#  artifacts in the CMake build tree, stages them into a clean layout and then
-#  invokes ISCC against that staging directory.
+#  Reads the version from the VERSION file and the product naming from
+#  CMakeLists.txt (via packaging/common.ps1), locates the built artifacts in
+#  the CMake build tree, stages them into a clean layout and then invokes ISCC
+#  against that staging directory.
 #
 #  Staging (rather than pointing Inno straight at the build tree) keeps the
 #  .iss simple and makes a missing artifact a loud error instead of a silently
@@ -25,20 +25,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Here        = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = (Resolve-Path (Join-Path $Here "..\..")).Path
+. (Join-Path $Here "..\common.ps1")
 
 if ([string]::IsNullOrEmpty($BuildDir)) {
-    $BuildDir = Join-Path $ProjectRoot "build"
+    $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { Join-Path $ProjectRoot "build" }
 }
 
-# Keep these in sync with CMakeLists.txt.
-$ProjectName = "YupPlugin"
-$ProductName = "YUP Instrument"
-$Company     = "YUP Audio"
-$Url         = "https://github.com/kunitoki/yup-plugin-template"
-
-$Version = (Get-Content (Join-Path $ProjectRoot "VERSION") -Raw).Trim()
-$DistDir = Join-Path $ProjectRoot "dist"
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
 # -----------------------------------------------------------------------------
@@ -96,11 +88,13 @@ $Iss = Join-Path $Here "installer.iss"
 Write-Host "==> Building Windows installer $ProductName $Version ($Config)"
 
 $isccArgs = @(
+    "/DMyAppId=$InstallerGuid",
     "/DMyAppName=$ProductName",
     "/DMyAppProject=$ProjectName",
     "/DMyAppVersion=$Version",
-    "/DMyCompany=$Company",
-    "/DMyAppURL=$Url",
+    "/DMyCompany=$CompanyName",
+    "/DMyAppURL=$PluginUrl",
+    "/DMyAppDescription=$PluginDescription",
     "/DStageDir=$Stage",
     "/DOutputDir=$DistDir",
     "/DIconFile=$(Join-Path $ProjectRoot 'assets\app-icon.ico')"

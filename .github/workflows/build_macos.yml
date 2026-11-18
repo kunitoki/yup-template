@@ -19,7 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROJECT_NAME: YupPlugin
   SCCACHE_GHA_ENABLED: "true"
   # Optional code-signing / notarization. Leave the secrets unset to produce an
   # unsigned installer (the default). See packaging/README.md for the full list.
@@ -40,6 +39,10 @@ jobs:
       with:
         fetch-depth: 0
         submodules: 'true'
+
+    - name: Read project name
+      shell: bash
+      run: echo "PROJECT_NAME=$(sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1)" >> "$GITHUB_ENV"
 
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@v0.0.11

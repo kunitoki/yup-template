@@ -72,6 +72,7 @@ yup_standalone_app (
     TARGET_APP_NAMESPACE "${target_company}"
     TARGET_CONSOLE ${target_console}
     DEFINITIONS
+        YupPlugin_Name="${PRODUCT_NAME}"
         YUP_USE_CURL=0
         YUP_MODAL_LOOPS_PERMITTED=1
     PRELOAD_FILES

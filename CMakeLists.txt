@@ -91,6 +91,11 @@ set (PLUGIN_MANUFACTURER_CODE "Yup!") # Manufacturer id (exactly 4 characters, o
 # Application icon file (path to .png).
 set (APPLICATION_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/app-icon.png")
 
+# Unique id of the Windows installer (Inno Setup AppId). Generate your own GUID
+# for a real product (e.g. `powershell [guid]::NewGuid()`) and keep it stable
+# across releases so upgrades replace the previous installation.
+set (INSTALLER_GUID "28F190D9-1045-4E2D-B7BC-F7D875542C27")
+
 # Version can be overridden via command line: cmake -DTARGET_VERSION="2.0.0" ..
 set (TARGET_VERSION "${CURRENT_VERSION}" CACHE STRING "Plugin version")
 

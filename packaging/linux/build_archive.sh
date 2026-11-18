@@ -56,9 +56,9 @@ if [[ -f "$PROJECT_ROOT/assets/app-icon.png" ]]; then
 fi
 
 mkdir -p "$ROOT/share/applications"
-sed -e "s/@PRODUCT_NAME@/$PRODUCT_NAME/g" \
-    -e "s/@PRODUCT_SLUG@/$PRODUCT_SLUG/g" \
-    -e "s/@PLUGIN_DESCRIPTION@/A simple polyphonic instrument built with YUP./g" \
+sed -e "s|@PRODUCT_NAME@|$PRODUCT_NAME|g" \
+    -e "s|@PRODUCT_SLUG@|$PRODUCT_SLUG|g" \
+    -e "s|@PLUGIN_DESCRIPTION@|$PLUGIN_DESCRIPTION|g" \
     "$PACKAGING_DIR/linux/app.desktop.in" > "$ROOT/share/applications/$PRODUCT_SLUG.desktop"
 
 [[ -f "$PROJECT_ROOT/LICENSE" ]] && cp "$PROJECT_ROOT/LICENSE" "$ROOT/LICENSE"

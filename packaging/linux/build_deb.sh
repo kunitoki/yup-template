@@ -58,9 +58,9 @@ if [[ -n "$STANDALONE" ]]; then
     fi
 
     mkdir -p "$STAGE/usr/share/applications"
-    sed -e "s/@PRODUCT_NAME@/$PRODUCT_NAME/g" \
-        -e "s/@PRODUCT_SLUG@/$PKG_NAME/g" \
-        -e "s/@PLUGIN_DESCRIPTION@/A simple polyphonic instrument built with YUP./g" \
+    sed -e "s|@PRODUCT_NAME@|$PRODUCT_NAME|g" \
+        -e "s|@PRODUCT_SLUG@|$PKG_NAME|g" \
+        -e "s|@PLUGIN_DESCRIPTION@|$PLUGIN_DESCRIPTION|g" \
         "$PACKAGING_DIR/linux/app.desktop.in" > "$STAGE/usr/share/applications/$PKG_NAME.desktop"
     FOUND+=("standalone")
 fi
@@ -79,7 +79,7 @@ Architecture: $ARCH
 Maintainer: $COMPANY_NAME
 Installed-Size: $INSTALLED_KB
 Description: $PRODUCT_NAME
- A simple polyphonic instrument built with YUP.
+ $PLUGIN_DESCRIPTION
  Installs the VST3, CLAP and LV2 plugin formats and a standalone application.
 CONTROL
 

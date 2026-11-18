@@ -19,7 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROJECT_NAME: YupPlugin
   # Optional Azure Trusted Signing of the installer. Leave the secrets unset to
   # produce an unsigned installer (the default). See packaging/README.md.
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -38,6 +37,10 @@ jobs:
       with:
         fetch-depth: 0
         submodules: 'true'
+
+    - name: Read project name
+      shell: bash
+      run: echo "PROJECT_NAME=$(sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1)" >> "$GITHUB_ENV"
 
     - name: Configure
       run: cmake ${{ github.workspace }} -B ${{ runner.workspace }}/build

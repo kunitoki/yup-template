@@ -89,7 +89,7 @@ yup::AudioBusLayout PluginProcessor::makeBusLayout()
 
 //==============================================================================
 PluginProcessor::PluginProcessor()
-    : yup::AudioProcessor ("YupPlugin", makeBusLayout())
+    : yup::AudioProcessor (YupPlugin_Name, makeBusLayout())
 {
     gain = addSynthParameter (*this, "gain", "Gain", gainParam, { 0.0f, 1.0f }, 0.8f, yup::AudioParameter::ParameterUnit::Percent);
     waveform = addSynthParameter (*this, "waveform", "Waveform", waveformParam, { 0.0f, 2.0f, 1.0f }, 0.0f, yup::AudioParameter::ParameterUnit::Generic, { "Sine", "Saw", "Square" });
@@ -178,7 +178,7 @@ yup::Result PluginProcessor::loadStateFromDataTree (const yup::DataTree& state)
 
 yup::Result PluginProcessor::saveStateIntoDataTree (yup::DataTree& state)
 {
-    state = yup::DataTree ("YupPluginState");
+    state = yup::DataTree ("PluginState");
     auto transaction = state.beginTransaction();
 
     for (const auto& parameter : getParameters())

@@ -3,39 +3,49 @@
 ;
 ;  This script installs the plugin formats and standalone application from a
 ;  staging directory that packaging\windows\build_installer.ps1 populates from
-;  the CMake build tree. The helper script passes the staging path and the
-;  Have* defines (one per format that was actually built):
+;  the CMake build tree. All product naming (name, project, company, URL,
+;  description) is inherited from CMakeLists.txt and passed in as defines by
+;  that helper, so nothing is duplicated here. The helper also passes the
+;  staging path and the Have* defines (one per format that was actually built):
 ;
 ;    iscc packaging\windows\installer.iss ^
-;         /DMyAppId=28F190D9-1045-4E2D-B7BC-F7D875542C27 ^
+;         /DMyAppId=<guid> ^
+;         /DMyAppName="<product name>" /DMyAppProject=<project name> ^
+;         /DMyCompany="<company>" /DMyAppURL=<url> /DMyAppDescription="<text>" ^
 ;         /DMyAppVersion=1.0.0 ^
 ;         /DStageDir=C:\path\to\dist\win-stage ^
+;         /DOutputDir=C:\path\to\dist ^
+;         /DIconFile=C:\path\to\assets\app-icon.ico ^
 ;         /DHaveVst3=1 /DHaveClap=1 /DHaveLv2=1 /DHaveStandalone=1
 ;
 ;  Run it through packaging\windows\build_installer.ps1 rather than by hand.
 ; ============================================================================
 
-; Unique application id. Generate your own GUID for a real product (e.g. `powershell [guid]::NewGuid()`).
+; Everything below comes from CMakeLists.txt via build_installer.ps1 - never
+; hardcode a fallback here, or the two would drift apart.
 #ifndef MyAppId
-  #define MyAppId "28F190D9-1045-4E2D-B7BC-F7D875542C27"
+  #error MyAppId is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef MyAppName
-  #define MyAppName "YUP Instrument"
+  #error MyAppName is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef MyAppProject
-  #define MyAppProject "YupPlugin"
+  #error MyAppProject is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #error MyAppVersion is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef MyCompany
-  #define MyCompany "YUP Audio"
+  #error MyCompany is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef MyAppURL
-  #define MyAppURL "https://github.com/kunitoki/yup-plugin-template"
+  #error MyAppURL is not defined - run packaging\windows\build_installer.ps1
+#endif
+#ifndef MyAppDescription
+  #error MyAppDescription is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef StageDir
-  #define StageDir "..\..\dist\win-stage"
+  #error StageDir is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef OutputDir
   #define OutputDir "..\..\dist"
@@ -50,6 +60,10 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyCompany}
 AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+AppComments={#MyAppDescription}
+VersionInfoDescription={#MyAppDescription}
 DefaultDirName={autopf}\{#MyCompany}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes

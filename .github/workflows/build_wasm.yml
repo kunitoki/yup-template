@@ -19,7 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROJECT_NAME: YupPlugin
   INSTALL_DEPS: >-
     libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev libfreetype6-dev
     libx11-dev libxcomposite-dev libxcursor-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev
@@ -38,6 +37,10 @@ jobs:
       with:
         fetch-depth: 0
         submodules: 'true'
+
+    - name: Read project name
+      shell: bash
+      run: echo "PROJECT_NAME=$(sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1)" >> "$GITHUB_ENV"
 
     - name: Setup emsdk
       uses: mymindstorm/setup-emsdk@v16

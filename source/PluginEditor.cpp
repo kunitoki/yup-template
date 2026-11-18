@@ -29,7 +29,7 @@ PluginEditor::PluginEditor (PluginProcessor& processorToEdit)
     , keyboard (processorToEdit.getKeyboardState(), yup::MidiKeyboardComponent::horizontalKeyboard)
     , font (yup::ApplicationTheme::getGlobalTheme()->getDefaultFont())
 {
-    title.setText ("YUP Instrument", yup::dontSendNotification);
+    title.setText (YupPlugin_Name, yup::dontSendNotification);
     title.setJustification (yup::Justification::center);
     title.setColor (yup::Label::Style::textFillColorId, yup::Colors::white);
     addAndMakeVisible (title);
