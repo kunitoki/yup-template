@@ -54,7 +54,7 @@ macro (yup_template_setup_deployment_target)
   if (CMAKE_HOST_APPLE)
     set (CMAKE_XCODE_GENERATE_SCHEME OFF)
 
-    if (IOS OR CMAKE_SYSTEM_NAME MATCHES "iOS")
+    if (IOS OR CMAKE_SYSTEM_NAME MATCHES "iOS" OR CMAKE_TOOLCHAIN_FILE MATCHES ".*ios\\.cmake$")
       set (_yup_template_is_mac OFF)
     else()
       set (_yup_template_is_mac ON)
@@ -80,6 +80,14 @@ macro (yup_template_setup_deployment_target)
 
     if (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS _yup_template_min_deployment_target)
       set (CMAKE_OSX_DEPLOYMENT_TARGET ${_yup_template_min_deployment_target})
+    endif()
+
+    if (NOT _yup_template_is_mac)
+      if (NOT DEFINED DEPLOYMENT_TARGET OR DEPLOYMENT_TARGET VERSION_LESS CMAKE_OSX_DEPLOYMENT_TARGET)
+        set (DEPLOYMENT_TARGET ${CMAKE_OSX_DEPLOYMENT_TARGET})
+      else()
+        set (CMAKE_OSX_DEPLOYMENT_TARGET ${DEPLOYMENT_TARGET})
+      endif()
     endif()
 
     message (STATUS "YUP template: CMAKE_OSX_DEPLOYMENT_TARGET is set to ${CMAKE_OSX_DEPLOYMENT_TARGET}")
