@@ -82,21 +82,60 @@ VERSION="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
 # A filesystem-friendly product slug (no spaces).
 PRODUCT_SLUG="${PRODUCT_NAME// /-}"
 
+# Read a boolean option (BUILD_APP, BUILD_PLUGIN, ...) from the CMake cache of
+# the build directory, so the scripts skip what the build switched off instead
+# of looking for it. Succeeds when the option is ON, and also when the cache or
+# the entry is missing: an unknown build is searched for everything.
+# Usage: build_option_enabled <NAME>
+build_option_enabled() {
+    local name="$1" value
+    [[ -f "$BUILD_DIR/CMakeCache.txt" ]] || return 0
+    value="$(sed -n -E "s/^${name}:[A-Z]+=(.*)$/\\1/p" "$BUILD_DIR/CMakeCache.txt" | head -n 1)"
+    case "$(printf '%s' "$value" | tr '[:lower:]' '[:upper:]')" in
+        OFF|0|NO|FALSE|N) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+# True when a build output holds something that was actually built. CMake
+# writes the Info.plist of every bundle target at generate time, so bundles of
+# targets that were never built (or of another configuration) exist as empty
+# shells that must not be shipped. Plain files always count as built.
+# Usage: artifact_has_binary <path>
+artifact_has_binary() {
+    local artifact="$1"
+    [[ -d "$artifact" ]] || return 0
+    if [[ -f "$artifact/Contents/Info.plist" ]]; then
+        [[ -n "$(find "$artifact/Contents/MacOS" -type f -print -quit 2>/dev/null)" ]]
+    else
+        [[ -n "$(find "$artifact" -type f ! -name 'Info.plist' ! -name 'PkgInfo' -print -quit 2>/dev/null)" ]]
+    fi
+}
+
 # Find every bundle/file with the given extension produced by the build, one per
-# line. Searches the common config directory as well as the VST3-specific
-# subtree, skipping third-party bundles under externals/ and the test/benchmark
-# runners (e.g. "<project>_tests.app") which must never be shipped in a package,
-# as well as anything nested inside another bundle. Both the application and the standalone plugin produce a ".app" bundle, so the
-# packaging scripts stage every match rather than just the first one.
+# line. Only outputs sitting directly in a "<CONFIG>/" folder are returned (some
+# formats nest every configuration under the folder of another one), skipping
+# third-party bundles under externals/, the test/benchmark runners (e.g.
+# "<project>_tests.app") and the AUv3 container application, which must never be
+# shipped in a package, anything nested inside another bundle, and the empty
+# bundles CMake generates for targets that were not built. Both the application
+# and the standalone plugin produce a ".app" bundle, so the packaging scripts
+# stage every match rather than just the first one.
 # Usage: find_artifacts <extension>
 find_artifacts() {
-    local ext="$1"
+    local ext="$1" artifact
     { find "$BUILD_DIR" \
         \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
         -path "*/$CONFIG/*" -name "*.$ext" -print 2>/dev/null \
-        | grep -Ev '(\.dSYM|_tests\.|_benchmarks\.)' \
+        | grep -E "/$CONFIG/[^/]+\\.$ext\$" \
+        | grep -Ev '(\.dSYM|_tests\.|_benchmarks\.|_auv3_container\.)' \
         | grep -Ev '\.(app|appex|vst3|clap|component|lv2|aaxplugin)/' \
-        | sort; } || true
+        | sort; } \
+    | while IFS= read -r artifact; do
+        if artifact_has_binary "$artifact"; then
+            printf '%s\n' "$artifact"
+        fi
+    done || true
 }
 
 # Find the first bundle/file with the given extension produced by the build.
@@ -106,12 +145,13 @@ find_artifact() {
 }
 
 # Find an executable produced by the build for the given file name (no extension
-# on Linux, ".exe" on Windows). Usage: find_executable <name>
+# on Linux, ".exe" on Windows), sitting directly in a "<CONFIG>/" folder.
+# Usage: find_executable <name>
 find_executable() {
     local name="$1"
     { find "$BUILD_DIR" \
         \( -path '*/externals/*' -o -path '*/_deps/*' \) -prune -o \
-        -path "*/$CONFIG/*" -name "$name" -type f -print 2>/dev/null \
+        -path "*/$CONFIG/$name" -type f -print 2>/dev/null \
         | head -n 1; } || true
 }
 

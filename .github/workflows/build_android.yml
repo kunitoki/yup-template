@@ -6,16 +6,36 @@ on:
   push:
     paths:
       - ".gitmodules"
+      - "yup"
       - "CMakeLists.txt"
+      - "VERSION"
       - "**/workflows/build_android.yml"
+      - "cmake/**"
       - "**/source/**"
       - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
+      - "**/packaging/**"
     branches:
       - "**"
+  # Pull requests from forks get no push build, so they are built here.
+  pull_request:
+    paths:
+      - ".gitmodules"
+      - "yup"
+      - "CMakeLists.txt"
+      - "VERSION"
+      - "**/workflows/build_android.yml"
+      - "cmake/**"
+      - "**/source/**"
+      - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
+      - "**/packaging/**"
   workflow_call:
 
 concurrency:
-  group: build_android-${{ github.workflow }}-${{ github.ref }}
+  group: build_android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -31,6 +51,8 @@ env:
 
 jobs:
   build:
+    # Branches of this repository are already built by the push event.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     steps:
       - name: Install Dependencies

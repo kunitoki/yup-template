@@ -1,7 +1,7 @@
 # =============================================================================
-# YUP TEMPLATE - CMakeLists.txt
+# CMakeLists.txt
 # =============================================================================
-# This is a template for creating cross-platform standalone applications and
+# A cross-platform project for standalone applications and
 # audio plugins (CLAP, VST3, AU, AUv3, LV2, AAX and a Standalone app) with the
 # YUP framework. Both targets live in the same source tree and are built by
 # default - turn off the one you don't need with -DBUILD_APP=OFF or
@@ -11,18 +11,19 @@
 cmake_minimum_required (VERSION 3.31)
 
 # =============================================================================
-# TEMPLATE UTILITIES
+# PROJECT UTILITIES
 # =============================================================================
-# Shared helper macros (version parsing, Apple deployment target detection).
+# Shared helper macros (version parsing, Apple deployment target detection,
+# product name checks, LTO).
 include (${CMAKE_CURRENT_SOURCE_DIR}/cmake/utilities.cmake)
 
 # Read the version from the VERSION file for centralized version control. This
 # sets CURRENT_VERSION, VERSION_MAJOR, VERSION_MINOR and VERSION_PATCH.
-yup_template_read_version ("${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+project_read_version ("${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
 # Detect the minimum Apple deployment target supported by the installed Xcode
 # and set CMAKE_OSX_DEPLOYMENT_TARGET accordingly (no-op on other hosts).
-yup_template_setup_deployment_target ()
+project_setup_deployment_target ()
 
 # =============================================================================
 # PROJECT CONFIGURATION - CHANGE THESE VALUES FOR YOUR PROJECT!
@@ -32,6 +33,8 @@ yup_template_setup_deployment_target ()
 # CMake, and they cannot expand ${variable} references.
 
 # The internal name of the project and the prefix of every target (no spaces).
+# It is also the name of the plugin target, so it must differ from
+# APP_PRODUCT_NAME and PLUGIN_PRODUCT_NAME (checked at configure time).
 set (PROJECT_NAME "YupTemplate")
 
 # The display name of the whole product, used for the installers and archives.
@@ -81,6 +84,11 @@ set (PLUGIN_DESCRIPTION "A simple polyphonic instrument built with YUP.")
 set (PLUGIN_CODE "YpIn")              # Unique plugin id (AU subtype / AAX product id)
 set (PLUGIN_MANUFACTURER_CODE "Yup!") # Manufacturer id (exactly 4 characters, one uppercase)
 
+# AAX plugin ids of the native and the AudioSuite variants (four characters
+# each, unique within the product and stable once shipped).
+set (PLUGIN_AAX_NATIVE_CODE "YpNa")
+set (PLUGIN_AAX_AUDIOSUITE_CODE "YpAs")
+
 # AAX plugin category.
 set (PLUGIN_AAX_CATEGORY "AAX_ePlugInCategory_SWGenerators")
 
@@ -90,6 +98,11 @@ set (PLUGIN_AAX_CATEGORY "AAX_ePlugInCategory_SWGenerators")
 # for a real product (e.g. `powershell [guid]::NewGuid()`) and keep it stable
 # across releases so upgrades replace the previous installation.
 set (INSTALLER_GUID "28F190D9-1045-4E2D-B7BC-F7D875542C27")
+
+# Platforms published by a tagged release (.github/workflows/release.yml), space
+# separated. Remove the ones your product does not support: their build jobs are
+# skipped and no longer block the release.
+set (RELEASE_PLATFORMS "macos windows linux wasm ios android")
 
 # Version can be overridden via command line: cmake -DTARGET_VERSION="2.0.0" ..
 set (TARGET_VERSION "${CURRENT_VERSION}" CACHE STRING "Product version")
@@ -104,6 +117,7 @@ option (BUILD_TESTS "Build test suite" ON)
 option (BUILD_BENCHMARKS "Build the DSP micro-benchmarks (google/benchmark)" ON)
 option (ENABLE_COVERAGE "Enable code coverage analysis (requires lcov/gcov)" OFF)
 option (ENABLE_CODE_SIGNING "Enable code signing (macOS/iOS)" OFF)
+option (ENABLE_LTO "Enable link time optimisation of the Release configuration" OFF)
 
 # Plugin formats to build. Toggle these to match your distribution targets.
 option (PLUGIN_BUILD_CLAP "Build the CLAP format" ON)
@@ -113,6 +127,10 @@ option (PLUGIN_BUILD_AUV3 "Build the Audio Unit v3 app extension" ON)
 option (PLUGIN_BUILD_LV2 "Build the LV2 format" ON)
 option (PLUGIN_BUILD_STANDALONE "Build the Standalone application of the plugin" ON)
 
+# Installs every plugin format into the user plugin folders after each build
+# (macOS). Handy while developing; switch it off for CI and packaging builds.
+option (PLUGIN_COPY_AFTER_BUILD "Copy the plugins into the user plugin folders after building" ON)
+
 # Code signing configuration (macOS/iOS).
 set (MACOS_SIGNING_IDENTITY "" CACHE STRING "macOS code signing identity")
 set (DEVELOPMENT_TEAM_ID "" CACHE STRING "Apple Developer Team ID")
@@ -120,6 +138,8 @@ set (DEVELOPMENT_TEAM_ID "" CACHE STRING "Apple Developer Team ID")
 if (NOT BUILD_APP AND NOT BUILD_PLUGIN)
     message (FATAL_ERROR "Nothing to build: enable at least one of BUILD_APP and BUILD_PLUGIN.")
 endif()
+
+project_check_product_names ()
 
 # =============================================================================
 # PROJECT DECLARATION
@@ -150,6 +170,28 @@ set (YUP_ENABLE_CLAP_VALIDATOR ON)
 set (YUP_ENABLE_AUVAL_VALIDATOR ON)
 set (YUP_ENABLE_PLUGINVAL ON)
 add_subdirectory (yup)
+
+# =============================================================================
+# EMBEDDED RESOURCES
+# =============================================================================
+# Shaders, presets, fonts or images compiled into the plugin. Create the bundles
+# here with yup_add_embedded_binary_resources or yup_add_shader_bundle and list
+# their targets in PLUGIN_RESOURCE_TARGETS: they are OBJECT libraries, so their
+# objects have to be forwarded to every plugin format binary (and to the tests
+# and benchmarks), which the plugin section below does once for the whole list.
+#
+#   yup_add_embedded_binary_resources (${PROJECT_NAME}_binary_data
+#       OUT_DIR BinaryData
+#       HEADER BinaryData.h
+#       NAMESPACE BinaryData
+#       RESOURCE_NAMES AppIcon_png
+#       RESOURCES "${APPLICATION_ICON}")
+#
+#   list (APPEND PLUGIN_RESOURCE_TARGETS ${PROJECT_NAME}_binary_data)
+#
+# and then, from the plugin sources: #include <BinaryData/BinaryData.h>
+
+set (PLUGIN_RESOURCE_TARGETS "")
 
 # =============================================================================
 # SOURCE FILES
@@ -230,9 +272,11 @@ if (BUILD_PLUGIN)
         PLUGIN_AU_SUBTYPE "${PLUGIN_CODE}"
         PLUGIN_AAX_MANUFACTURER_ID "${PLUGIN_MANUFACTURER_CODE}"
         PLUGIN_AAX_PRODUCT_ID "${PLUGIN_CODE}"
+        PLUGIN_AAX_PLUGIN_ID_NATIVE "${PLUGIN_AAX_NATIVE_CODE}"
+        PLUGIN_AAX_PLUGIN_ID_AUDIOSUITE "${PLUGIN_AAX_AUDIOSUITE_CODE}"
         PLUGIN_AAX_CATEGORY "${PLUGIN_AAX_CATEGORY}"
 
-        PLUGIN_COPY_AFTER_BUILD ON
+        PLUGIN_COPY_AFTER_BUILD ${PLUGIN_COPY_AFTER_BUILD}
 
         MODULES
           yup::yup_gui
@@ -245,6 +289,13 @@ if (BUILD_PLUGIN)
     target_include_directories (${PLUGIN_TARGET}_shared PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/source/plugin"
         "${CMAKE_CURRENT_SOURCE_DIR}/source/shared")
+
+    # The resource bundles are OBJECT libraries: the core compiles against them
+    # and hands their objects to whatever links it.
+    foreach (resource_target ${PLUGIN_RESOURCE_TARGETS})
+        target_link_libraries (${PLUGIN_TARGET}_shared PUBLIC ${resource_target})
+        target_sources (${PLUGIN_TARGET}_shared INTERFACE $<TARGET_OBJECTS:${resource_target}>)
+    endforeach()
 endif()
 
 # =============================================================================
@@ -303,6 +354,19 @@ endif()
 if (_template_all_targets)
     add_custom_target (${PROJECT_NAME}_all DEPENDS ${_template_all_targets})
     set_target_properties (${PROJECT_NAME}_all PROPERTIES XCODE_GENERATE_SCHEME ON)
+endif()
+
+# =============================================================================
+# LINK TIME OPTIMISATION
+# =============================================================================
+
+if (ENABLE_LTO)
+    set (lto_targets ${APP_TARGET} ${PLUGIN_TARGET}_shared)
+    foreach (plugin_format clap vst3 au auv3 lv2 standalone aax)
+        list (APPEND lto_targets ${PLUGIN_TARGET}_${plugin_format}_plugin)
+    endforeach()
+
+    project_enable_lto (${lto_targets})
 endif()
 
 # =============================================================================

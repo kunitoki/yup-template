@@ -5,14 +5,32 @@ on:
   push:
     paths:
       - ".gitmodules"
+      - "yup"
       - "CMakeLists.txt"
+      - "VERSION"
       - "**/workflows/build_wasm.yml"
+      - "cmake/**"
       - "**/source/**"
       - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
       - "**/packaging/**"
-      - "VERSION"
     branches:
       - "**"
+  # Pull requests from forks get no push build, so they are built here.
+  pull_request:
+    paths:
+      - ".gitmodules"
+      - "yup"
+      - "CMakeLists.txt"
+      - "VERSION"
+      - "**/workflows/build_wasm.yml"
+      - "cmake/**"
+      - "**/source/**"
+      - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
+      - "**/packaging/**"
 
 concurrency:
   group: build_wasm-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -27,6 +45,8 @@ env:
 
 jobs:
   build:
+    # Branches of this repository are already built by the push event.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
     - name: Install Dependencies

@@ -41,9 +41,11 @@ stage_bundle() {
     FOUND+=("$ext")
 }
 
-stage_bundle vst3 "usr/lib/vst3"
-stage_bundle clap "usr/lib/clap"
-stage_bundle lv2  "usr/lib/lv2"
+if build_option_enabled BUILD_PLUGIN; then
+    build_option_enabled PLUGIN_BUILD_VST3 && stage_bundle vst3 "usr/lib/vst3"
+    build_option_enabled PLUGIN_BUILD_CLAP && stage_bundle clap "usr/lib/clap"
+    build_option_enabled PLUGIN_BUILD_LV2  && stage_bundle lv2  "usr/lib/lv2"
+fi
 
 if [[ -f "$PROJECT_ROOT/assets/app-icon.png" ]]; then
     mkdir -p "$STAGE/usr/share/icons/hicolor/512x512/apps"
@@ -70,8 +72,13 @@ stage_executable() {
     FOUND+=("$kind")
 }
 
-stage_executable "$APP_PRODUCT_NAME"    "$PRODUCT_DESCRIPTION" "application"
-stage_executable "$PLUGIN_PRODUCT_NAME" "$PLUGIN_DESCRIPTION"  "plugin standalone"
+# Only look for what the build was configured to produce.
+if build_option_enabled BUILD_APP; then
+    stage_executable "$APP_PRODUCT_NAME" "$PRODUCT_DESCRIPTION" "application"
+fi
+if build_option_enabled BUILD_PLUGIN && build_option_enabled PLUGIN_BUILD_STANDALONE; then
+    stage_executable "$PLUGIN_PRODUCT_NAME" "$PLUGIN_DESCRIPTION" "plugin standalone"
+fi
 
 [[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the project first."
 
@@ -84,12 +91,10 @@ Version: $VERSION
 Section: sound
 Priority: optional
 Architecture: $ARCH
-Maintainer: $COMPANY_NAME
+Maintainer: $COMPANY_NAME <$PRODUCT_EMAIL>
 Installed-Size: $INSTALLED_KB
 Description: $PRODUCT_NAME
  $PRODUCT_DESCRIPTION
- Installs the standalone application and the VST3, CLAP, LV2 and standalone
- formats of the $PLUGIN_PRODUCT_NAME plugin.
 CONTROL
 
 OUTPUT="$DIST_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"

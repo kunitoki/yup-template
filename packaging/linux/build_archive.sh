@@ -35,9 +35,11 @@ stage_bundle() {
     FOUND+=("$ext")
 }
 
-stage_bundle vst3 "vst3"
-stage_bundle clap "clap"
-stage_bundle lv2  "lv2"
+if build_option_enabled BUILD_PLUGIN; then
+    build_option_enabled PLUGIN_BUILD_VST3 && stage_bundle vst3 "vst3"
+    build_option_enabled PLUGIN_BUILD_CLAP && stage_bundle clap "clap"
+    build_option_enabled PLUGIN_BUILD_LV2  && stage_bundle lv2  "lv2"
+fi
 
 # The standalone executables on Linux are plain files (no bundle), named after
 # their product name. Each one gets a launcher-friendly slug and a .desktop entry.
@@ -64,8 +66,13 @@ stage_executable() {
     FOUND+=("$kind")
 }
 
-stage_executable "$APP_PRODUCT_NAME"    "$PRODUCT_DESCRIPTION" "application"
-stage_executable "$PLUGIN_PRODUCT_NAME" "$PLUGIN_DESCRIPTION"  "plugin standalone"
+# Only look for what the build was configured to produce.
+if build_option_enabled BUILD_APP; then
+    stage_executable "$APP_PRODUCT_NAME" "$PRODUCT_DESCRIPTION" "application"
+fi
+if build_option_enabled BUILD_PLUGIN && build_option_enabled PLUGIN_BUILD_STANDALONE; then
+    stage_executable "$PLUGIN_PRODUCT_NAME" "$PLUGIN_DESCRIPTION" "plugin standalone"
+fi
 
 [[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the project first."
 

@@ -9,30 +9,66 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# Builds every packaged platform (reusing the per-platform build workflows),
-# collects their uploaded artifacts, and publishes them to a GitHub Release.
+# Builds every platform listed in RELEASE_PLATFORMS (see CMakeLists.txt), reusing
+# the per-platform build workflows, collects their uploaded artifacts, and
+# publishes them to a GitHub Release. Platforms that are not listed are skipped
+# and do not block the release.
 jobs:
+  config:
+    name: Read release platforms
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.read.outputs.platforms }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read RELEASE_PLATFORMS
+        id: read
+        shell: bash
+        run: |
+          platforms="$(sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*RELEASE_PLATFORMS[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1)"
+          [[ -n "$platforms" ]] || { echo "::error::RELEASE_PLATFORMS is empty or missing in CMakeLists.txt"; exit 1; }
+          # Padded with spaces so each job can match its own name as a whole word.
+          echo "platforms= $(echo $platforms) " >> "$GITHUB_OUTPUT"
+
   macos:
+    needs: config
+    if: contains(needs.config.outputs.platforms, ' macos ')
     uses: ./.github/workflows/build_macos.yml
+    secrets: inherit
 
   windows:
+    needs: config
+    if: contains(needs.config.outputs.platforms, ' windows ')
     uses: ./.github/workflows/build_windows.yml
+    secrets: inherit
 
   linux:
+    needs: config
+    if: contains(needs.config.outputs.platforms, ' linux ')
     uses: ./.github/workflows/build_linux.yml
 
   wasm:
+    needs: config
+    if: contains(needs.config.outputs.platforms, ' wasm ')
     uses: ./.github/workflows/build_wasm.yml
 
   ios:
+    needs: config
+    if: contains(needs.config.outputs.platforms, ' ios ')
     uses: ./.github/workflows/build_ios.yml
 
   android:
+    needs: config
+    if: contains(needs.config.outputs.platforms, ' android ')
     uses: ./.github/workflows/build_android.yml
 
   release:
     name: Publish Release
-    needs: [macos, windows, linux, wasm, ios, android]
+    needs: [config, macos, windows, linux, wasm, ios, android]
+    # Skipped platforms must not skip the release; failed or cancelled ones must stop it.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

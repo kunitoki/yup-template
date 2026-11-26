@@ -35,21 +35,36 @@ set (target_company "${BUNDLE_ID}")
 set (target_console OFF)
 set (target_gtest_modules "")
 set (target_app_modules "")
+set (target_definitions "")
 set (target_preloaded "")
 
-# Base modules available on all platforms
-list (APPEND target_app_modules
-    yup::yup_core
-    yup::yup_events
-    yup::yup_graphics)
+# On desktop the tests link the plugin core, exactly as the plugin's own
+# standalone does: the plugin sources, the YUP modules and the embedded
+# resources compile once and the tests see the real YupPlugin_* definitions.
+# Without the plugin (or on Emscripten, where only the header-only code is
+# tested) the tests compile the YUP modules they need themselves.
+set (target_uses_plugin_core OFF)
+if (BUILD_PLUGIN AND NOT YUP_PLATFORM_EMSCRIPTEN AND TARGET ${PLUGIN_TARGET}_shared)
+    set (target_uses_plugin_core ON)
+endif()
+
+if (target_uses_plugin_core)
+    list (APPEND target_app_modules
+        ${PLUGIN_TARGET}_shared)
+else()
+    list (APPEND target_app_modules
+        yup::yup_core
+        yup::yup_events
+        yup::yup_graphics)
+    list (APPEND target_definitions
+        YUP_USE_CURL=0
+        YUP_MODAL_LOOPS_PERMITTED=1)
+endif()
 
 if (NOT YUP_PLATFORM_EMSCRIPTEN)
-    list (APPEND target_app_modules
-        yup::yup_gui)
-    if (BUILD_PLUGIN)
+    if (NOT target_uses_plugin_core)
         list (APPEND target_app_modules
-            yup::yup_audio_processors
-            yup::yup_audio_gui)
+            yup::yup_gui)
     endif()
     list (APPEND target_gtest_modules
         GTest::gtest
@@ -77,9 +92,7 @@ yup_standalone_app (
     DEFINITIONS
         YupApp_Name="${APP_PRODUCT_NAME}"
         YupApp_Version="${TARGET_VERSION}"
-        YupPlugin_Name="${PLUGIN_PRODUCT_NAME}"
-        YUP_USE_CURL=0
-        YUP_MODAL_LOOPS_PERMITTED=1
+        ${target_definitions}
     PRELOAD_FILES
         ${target_preloaded}
     MODULES
@@ -92,7 +105,7 @@ yup_standalone_app (
 file (GLOB test_sources "${CMAKE_CURRENT_LIST_DIR}/test_*.cpp")
 list (APPEND test_sources "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 
-if (YUP_PLATFORM_EMSCRIPTEN OR NOT BUILD_PLUGIN)
+if (NOT target_uses_plugin_core)
     list (REMOVE_ITEM test_sources
         "${CMAKE_CURRENT_LIST_DIR}/test_PluginProcessor.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/test_PluginEditor.cpp")
@@ -106,13 +119,7 @@ target_include_directories (${target_name} PRIVATE
 target_sources (${target_name} PRIVATE ${test_sources})
 source_group (TREE ${CMAKE_CURRENT_LIST_DIR}/ FILES ${test_sources})
 
-if (NOT YUP_PLATFORM_EMSCRIPTEN AND BUILD_PLUGIN)
-    set (plugin_impl_sources
-        "${CMAKE_CURRENT_LIST_DIR}/../source/plugin/PluginProcessor.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/../source/plugin/PluginEditor.cpp")
-    target_sources (${target_name} PRIVATE ${plugin_impl_sources})
-    source_group ("Source Files" FILES ${plugin_impl_sources})
-
+if (target_uses_plugin_core)
     set (test_helper_headers "${CMAKE_CURRENT_LIST_DIR}/helpers/Helpers.h")
     target_sources (${target_name} PRIVATE ${test_helper_headers})
     source_group (TREE ${CMAKE_CURRENT_LIST_DIR}/ FILES ${test_helper_headers})
@@ -140,6 +147,19 @@ if (ENABLE_COVERAGE AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
         -fprofile-update=atomic
         "$<$<COMPILE_LANGUAGE:CXX>:-fno-elide-constructors>")
     target_link_options (${target_name} PRIVATE --coverage)
+
+    # The plugin sources are compiled by the plugin core, so that is where they
+    # have to be instrumented. Everything linking the core needs the runtime.
+    if (target_uses_plugin_core)
+        target_compile_options (${PLUGIN_TARGET}_shared PRIVATE
+            --coverage
+            -fprofile-arcs
+            -ftest-coverage
+            -fprofile-update=atomic
+            "$<$<COMPILE_LANGUAGE:CXX>:-fno-elide-constructors>")
+        target_link_options (${PLUGIN_TARGET}_shared INTERFACE --coverage)
+    endif()
+
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         target_link_libraries (${target_name} PRIVATE gcov)
     endif()

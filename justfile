@@ -8,6 +8,10 @@ platform := if os() == "macos" { "mac" } else if os() == "linux" { "linux" } els
 # Project / target name, read from CMakeLists.txt (the single source of truth).
 project := `sed -n -E 's/^[[:space:]]*set[[:space:]]*\([[:space:]]*PROJECT_NAME[[:space:]]+"([^"]*)".*/\1/p' CMakeLists.txt | head -n1`
 
+# Extra arguments for the configure recipes, e.g.
+#   just cmake_args="-DENABLE_LTO=ON -DPLUGIN_COPY_AFTER_BUILD=OFF" mac
+cmake_args := ""
+
 [doc("list available recipes")]
 default:
   @just --list
@@ -17,55 +21,55 @@ default:
 # =============================================================================
 [doc("generate project using Ninja multi config")]
 ninja PROFILING="OFF":
-  cmake -G "Ninja Multi-Config" -B build/ninja -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  cmake -G "Ninja Multi-Config" -B build/ninja -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON {{cmake_args}}
 
 [doc("generate and open project in macOS using Xcode")]
 mac PROFILING="OFF":
-  cmake -G Xcode -B build/mac -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  cmake -G Xcode -B build/mac -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON {{cmake_args}}
   -open build/mac/{{project}}.xcodeproj
 
 [doc("generate and open project in Windows using Visual Studio")]
 win PROFILING="OFF":
-  cmake -G "Visual Studio 18 2026" -B build/win -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  cmake -G "Visual Studio 18 2026" -B build/win -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON {{cmake_args}}
   -start build/win/{{project}}.slnx
 
 [doc("generate project in Linux using Ninja")]
 linux PROFILING="OFF":
-  cmake -G "Ninja Multi-Config" -B build/linux -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON
+  cmake -G "Ninja Multi-Config" -B build/linux -DYUP_ENABLE_PROFILING={{PROFILING}} -DBUILD_BENCHMARKS=ON {{cmake_args}}
 
 [doc("generate and open project for iOS using Xcode")]
 [macos]
 ios PLATFORM="OS64":
-  cmake -G Xcode -B build/ios -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}}
+  cmake -G Xcode -B build/ios -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}} {{cmake_args}}
   -open build/ios/{{project}}.xcodeproj
 
 [doc("generate and open project for iOS Simulator macOS using Xcode")]
 [macos]
 ios_simulator PLATFORM="SIMULATORARM64":
-  cmake -G Xcode -B build/ios_sim -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}}
+  cmake -G Xcode -B build/ios_sim -DCMAKE_TOOLCHAIN_FILE=yup/cmake/toolchains/ios.cmake -DPLATFORM={{PLATFORM}} {{cmake_args}}
   -open build/ios_sim/{{project}}.xcodeproj
 
 [doc("generate and open project for Android using Android Studio (macos)")]
 [macos]
 android:
-  cmake -G Xcode -B build/android -DYUP_TARGET_ANDROID=ON
+  cmake -G Xcode -B build/android -DYUP_TARGET_ANDROID=ON {{cmake_args}}
   -open -a /Applications/Android\ Studio.app build/android
 
 [doc("generate and open project for Android using Android Studio (windows)")]
 [windows]
 android:
-  cmake -G "Visual Studio 18 2026" -B build/android -DYUP_TARGET_ANDROID=ON
+  cmake -G "Visual Studio 18 2026" -B build/android -DYUP_TARGET_ANDROID=ON {{cmake_args}}
   -start "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe" build\\android
 
 [doc("generate and open project for Android using Android Studio (linux)")]
 [linux]
 android:
-  cmake -G "Unix Makefiles" -B build/android -DYUP_TARGET_ANDROID=ON
+  cmake -G "Unix Makefiles" -B build/android -DYUP_TARGET_ANDROID=ON {{cmake_args}}
 
 [doc("generate and build project for WASM")]
 emscripten CONFIG="Debug":
   emcc -v
-  emcmake cmake -G "Ninja Multi-Config" -B build/emscripten
+  emcmake cmake -G "Ninja Multi-Config" -B build/emscripten {{cmake_args}}
   cmake --build build/emscripten --config {{CONFIG}}
 
 [doc("run tests for WASM")]
@@ -99,10 +103,8 @@ test PLATFORM=platform CONFIG="Debug":
   GTEST_FILTER="{{gtest_filter}}" ctest --test-dir build/{{PLATFORM}}/tests -C {{CONFIG}} --output-on-failure
 
 [doc("build and run the DSP micro-benchmarks (google/benchmark)")]
-bench CONFIG="Release":
-  cmake -G "Ninja Multi-Config" -B build/bench -DBUILD_BENCHMARKS=ON
-  cmake --build build/bench --config {{CONFIG}} --target {{project}}_benchmarks
-  ./build/bench/{{CONFIG}}/{{project}}_benchmarks
+bench PLATFORM=platform CONFIG="Release":
+  cmake --build build/{{PLATFORM}} --config {{CONFIG}} --target {{project}}_benchmarks_run
 
 [confirm("Are you sure you want to clean the build folder? [y/N]")]
 [doc("clean project build artifacts for a specific platform")]
@@ -141,10 +143,16 @@ package-wasm CONFIG="Release":
 # DEVELOPER TOOLING
 # =============================================================================
 
+[doc("rename the project: `just rename --help` lists the options")]
+rename *ARGS:
+  python3 scripts/rename_project.py {{ARGS}}
+
+# CI runs `format-check` with the clang-format version pinned in
+# .github/workflows/format.yml: use the same one to get the same result.
 [doc("format all source files with clang-format")]
 format:
-  find source tests -type f \( -name '*.h' -o -name '*.cpp' \) -print0 | xargs -0 clang-format -i
+  find source tests benchmarks -type f \( -name '*.h' -o -name '*.cpp' \) -print0 | xargs -0 clang-format -i
 
 [doc("check source formatting without modifying files")]
 format-check:
-  find source tests -type f \( -name '*.h' -o -name '*.cpp' \) -print0 | xargs -0 clang-format --dry-run --Werror
+  find source tests benchmarks -type f \( -name '*.h' -o -name '*.cpp' \) -print0 | xargs -0 clang-format --dry-run --Werror

@@ -5,8 +5,8 @@
 
    These benchmarks exercise the header-only sound engine (source/shared/dsp) in
    isolation, so they depend only on google/benchmark and the C++ standard
-   library. Run them with `just bench` (or build the `*_benchmarks` target with
-   -DBUILD_BENCHMARKS=ON and execute it directly).
+   library. Run them with `just bench` (or build the `*_benchmarks_run` target
+   of any build folder).
 
   ==============================================================================
 */
