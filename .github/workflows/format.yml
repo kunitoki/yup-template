@@ -1,0 +1,48 @@
+name: Format
+
+on:
+  push:
+    paths:
+      - ".clang-format"
+      - "justfile"
+      - "**/workflows/format.yml"
+      - "**/source/**"
+      - "**/tests/**"
+      - "**/benchmarks/**"
+    branches:
+      - "**"
+  # Pull requests from forks get no push build, so they are checked here.
+  pull_request:
+    paths:
+      - ".clang-format"
+      - "justfile"
+      - "**/workflows/format.yml"
+      - "**/source/**"
+      - "**/tests/**"
+      - "**/benchmarks/**"
+
+concurrency:
+  group: format-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # clang-format output changes between releases: keep this version and the one
+  # used locally the same (e.g. `uvx clang-format==<version>`).
+  CLANG_FORMAT_VERSION: "21.1.8"
+
+jobs:
+  format:
+    # Branches of this repository are already checked by the push event.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Install clang-format and just
+      run: pipx install "clang-format==${CLANG_FORMAT_VERSION}" && pipx install rust-just
+
+    - name: Check formatting
+      run: |
+        clang-format --version
+        just format-check

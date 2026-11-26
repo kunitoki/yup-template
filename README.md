@@ -42,10 +42,14 @@ makes sound on day one:
 - **`source/shared/dsp/SynthVoice.h`** — a header-only, standard-library-only oscillator + envelope engine,
   trivial to unit test and to replace with your own DSP. Code in `source/shared/` is visible to both
   the application and the plugin.
-- **Tests** — a GoogleTest suite wired into YUP's shared test runner (no vendored `main.cpp`).
+- **Tests** — a GoogleTest suite wired into YUP's shared test runner (`tests/main.cpp` is a single
+  macro). On desktop it links the plugin core, so the plugin sources compile once and the tests see
+  the real `YupPlugin_*` definitions and embedded resources.
+- **Benchmarks** — google/benchmark micro-benchmarks of the sound engine and of the real processor.
 - **Packaging** — ready-to-run installer scripts for macOS, Windows, Linux, iOS, Android and WebAssembly
   that ship the application and the plugin together.
-- **CI** — GitHub Actions for every platform, including build, test, coverage and packaging.
+- **CI** — GitHub Actions for every platform, including build, test, format check, coverage and
+  packaging.
 
 ## Prerequisites
 
@@ -95,6 +99,12 @@ just build ninja Debug    # pick the build/<platform> folder and the configurati
 just clean mac            # wipe build/mac (or `just clean` to wipe everything)
 ```
 
+The configure recipes take extra CMake arguments through `cmake_args`:
+
+```bash
+just cmake_args="-DENABLE_LTO=ON -DPLUGIN_COPY_AFTER_BUILD=OFF" ninja
+```
+
 `PLATFORM` defaults to the host's native folder: `mac` on macOS, `win` on Windows and `linux` on
 Linux.
 
@@ -112,7 +122,8 @@ cmake --build build/ninja --config Release --target <PROJECT_NAME>_all
 | `<PROJECT_NAME>` | Every enabled plugin format (`BUILD_PLUGIN`) |
 
 Built artifacts land under `build/<platform>/<Config>/` (VST3 under `build/<platform>/VST3/<Config>/`).
-On macOS the plugins are also copied into your user plugin folders automatically after each build.
+On macOS the plugins are also copied into your user plugin folders automatically after each build;
+configure with `-DPLUGIN_COPY_AFTER_BUILD=OFF` to leave them alone (CI does).
 
 > [!NOTE]
 > **Android** produces a single Gradle project per build folder, so only one of the two targets can be
@@ -124,7 +135,8 @@ On macOS the plugins are also copied into your user plugin folders automatically
 ```bash
 just test                 # build + run the test suite via CTest (Debug)
 just test mac Release     # ...from a specific build folder and configuration
-just bench                # build + run the DSP micro-benchmarks in build/bench
+just bench                # build + run the micro-benchmarks (Release)
+just bench ninja Release  # ...from a specific build folder and configuration
 ```
 
 Or directly:
@@ -132,9 +144,16 @@ Or directly:
 ```bash
 cmake --build build/ninja --config Debug --target <PROJECT_NAME>_tests
 ctest --test-dir build/ninja/tests -C Debug --output-on-failure
+cmake --build build/ninja --config Release --target <PROJECT_NAME>_benchmarks_run
 ```
 
-For WebAssembly: `just emscripten_test`. The plugin tests are skipped when `BUILD_PLUGIN` is off.
+For WebAssembly: `just emscripten_test`. The plugin tests and the processor benchmarks are skipped
+when `BUILD_PLUGIN` is off.
+
+The macOS, Windows and Linux build workflows run the test suite, so a failing test fails CI. The
+`Format` workflow runs `just format-check` with the clang-format version pinned in
+`.github/workflows/format.yml`; use the same version locally (e.g. `uvx clang-format==<version>`),
+as the output differs between releases.
 
 ## Packaging
 
@@ -163,8 +182,21 @@ signing options and layout.
 
 ## Configuration
 
-Edit the variables near the top of `CMakeLists.txt` to make the template your own. This is the
-**only** place you need to touch: the sources (via the `YupApp_*` / `YupPlugin_*` macros), the
+Edit the variables near the top of `CMakeLists.txt` to make the template your own, by hand or with
+the rename script:
+
+```bash
+just rename --project-name MySynth --product-name "My Synth" --plugin-name "My Synth Plugin" \
+    --app-name "My Synth App" --company "My Company" --bundle-id com.mycompany.mysynth \
+    --plugin-code Mysy --manufacturer-code Myco
+just rename --help        # every option; --dry-run shows what would change
+```
+
+It rewrites the configuration block, derives the application and plugin bundle ids, generates a new
+`INSTALLER_GUID` and replaces the old product name and URL in the source header comments and in this
+README. `LICENSE` is left to you.
+
+The configuration block is the **only** place you need to touch: the sources (via the `YupApp_*` / `YupPlugin_*` macros), the
 `justfile`, the CI workflows and the packaging scripts all read these values from here. Keep them
 plain literal strings, the scripts can't expand `${...}` references.
 
@@ -179,10 +211,14 @@ plain literal strings, the scripts can't expand `${...}` references.
 | `PLUGIN_PRODUCT_NAME` / `PLUGIN_BUNDLE_ID` | Name and identifier of the plugin (and its standalone) |
 | `PLUGIN_DESCRIPTION` | Plugin description |
 | `PLUGIN_CODE` / `PLUGIN_MANUFACTURER_CODE` | Four-character AU/AAX codes (stable once shipped) |
+| `PLUGIN_AAX_NATIVE_CODE` / `PLUGIN_AAX_AUDIOSUITE_CODE` | Four-character ids of the AAX native and AudioSuite variants |
+| `RELEASE_PLATFORMS` | Platforms built and published by a tagged release; the others are skipped |
 | `INSTALLER_GUID` | Windows installer AppId - generate your own (`powershell [guid]::NewGuid()`) and keep it stable |
 
 `APP_PRODUCT_NAME` and `PLUGIN_PRODUCT_NAME` name the generated executables, so they must differ when
-both targets are built.
+both targets are built. Neither may be the same as `PROJECT_NAME`, which is the name of the plugin
+target: single-config Ninja would stop with `multiple rules generate <name>`. The configure step
+checks all three.
 
 The version lives in the `VERSION` file (`MAJOR.MINOR.PATCH`) and can be overridden with
 `-DTARGET_VERSION=...`. The version parsing and the Apple deployment target detection are shared
@@ -191,8 +227,27 @@ macros in `cmake/utilities.cmake`.
 Toggle targets, formats and features with CMake options, e.g. `-DPLUGIN_BUILD_VST3=OFF`:
 
 `BUILD_APP`, `BUILD_PLUGIN`, `PLUGIN_BUILD_CLAP`, `PLUGIN_BUILD_VST3`, `PLUGIN_BUILD_AU`,
-`PLUGIN_BUILD_AUV3`, `PLUGIN_BUILD_LV2`, `PLUGIN_BUILD_STANDALONE`, `BUILD_TESTS`, `BUILD_BENCHMARKS`,
-`ENABLE_COVERAGE`, `ENABLE_CODE_SIGNING`.
+`PLUGIN_BUILD_AUV3`, `PLUGIN_BUILD_LV2`, `PLUGIN_BUILD_STANDALONE`, `PLUGIN_COPY_AFTER_BUILD`,
+`BUILD_TESTS`, `BUILD_BENCHMARKS`, `ENABLE_COVERAGE`, `ENABLE_CODE_SIGNING`, `ENABLE_LTO`.
+
+`ENABLE_LTO` (off by default) switches on link time optimisation for the Release configuration of the
+application and of every plugin format. The packaging scripts read `BUILD_APP`, `BUILD_PLUGIN` and
+the `PLUGIN_BUILD_*` options from the build folder and skip what was switched off.
+
+### Embedded resources
+
+Shaders, presets, fonts or images are compiled into the plugin with `yup_add_embedded_binary_resources`
+or `yup_add_shader_bundle`. They are OBJECT libraries, so their objects must reach every plugin format
+binary: add the targets to `PLUGIN_RESOURCE_TARGETS` in `CMakeLists.txt` (the *Embedded resources*
+section holds a ready-to-uncomment example) and the plugin core, every format, the tests and the
+benchmarks get them.
+
+### Releases and pull requests
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the platforms listed in
+`RELEASE_PLATFORMS` and publishes their packages. Remove a platform from the list and it no longer
+blocks the release. The build workflows run on every push, and on pull requests coming from forks
+(branches of the repository itself are already built by their push).
 
 ## Project layout
 
@@ -201,6 +256,7 @@ Toggle targets, formats and features with CMake options, e.g. `-DPLUGIN_BUILD_VS
 ├── CMakeLists.txt          # Project configuration, the application and plugin targets
 ├── VERSION                 # Single source of truth for the version
 ├── cmake/utilities.cmake   # Shared CMake helper macros
+├── scripts/                # Project rename script
 ├── assets/                 # Application icon (png/ico/icns)
 ├── source/
 │   ├── app/                # Standalone application (YUPApplication + MainWindow)

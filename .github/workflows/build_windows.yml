@@ -5,14 +5,32 @@ on:
   push:
     paths:
       - ".gitmodules"
+      - "yup"
       - "CMakeLists.txt"
+      - "VERSION"
       - "**/workflows/build_windows.yml"
+      - "cmake/**"
       - "**/source/**"
       - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
       - "**/packaging/**"
-      - "VERSION"
     branches:
       - "**"
+  # Pull requests from forks get no push build, so they are built here.
+  pull_request:
+    paths:
+      - ".gitmodules"
+      - "yup"
+      - "CMakeLists.txt"
+      - "VERSION"
+      - "**/workflows/build_windows.yml"
+      - "cmake/**"
+      - "**/source/**"
+      - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
+      - "**/packaging/**"
 
 concurrency:
   group: build_windows-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -30,6 +48,8 @@ env:
 
 jobs:
   build:
+    # Branches of this repository are already built by the push event.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: windows-latest
     steps:
     - name: Checkout
@@ -47,6 +67,11 @@ jobs:
 
     - name: Build Debug
       run: cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}_all
+
+    - name: Test
+      run: |
+        cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}_tests
+        ctest --test-dir ${{ runner.workspace }}/build/tests -C Debug --output-on-failure
 
     - name: Build Release
       run: cmake --build ${{ runner.workspace }}/build --config Release --target ${{ env.PROJECT_NAME }}_all

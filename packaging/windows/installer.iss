@@ -1,17 +1,17 @@
 ; ============================================================================
-;  Inno Setup script for the YUP template (Windows installer).
+;  Inno Setup script of the Windows installer.
 ;
 ;  This script installs the standalone application, the plugin formats and the
 ;  plugin's standalone application from a
 ;  staging directory that packaging\windows\build_installer.ps1 populates from
-;  the CMake build tree. All product naming (name, project, company, URL,
+;  the CMake build tree. All product naming (name, slug, company, URL,
 ;  description) is inherited from CMakeLists.txt and passed in as defines by
 ;  that helper, so nothing is duplicated here. The helper also passes the
 ;  staging path and the Have* defines (one per format that was actually built):
 ;
 ;    iscc packaging\windows\installer.iss ^
 ;         /DMyAppId=<guid> ^
-;         /DMyAppName="<product name>" /DMyAppProject=<project name> ^
+;         /DMyAppName="<product name>" /DMyAppSlug=<product-name> ^
 ;         /DMyCompany="<company>" /DMyAppURL=<url> /DMyAppDescription="<text>" ^
 ;         /DMyAppExeName="<app product name>" /DMyPluginName="<plugin product name>" ^
 ;         /DMyAppVersion=1.0.0 ^
@@ -31,8 +31,8 @@
 #ifndef MyAppName
   #error MyAppName is not defined - run packaging\windows\build_installer.ps1
 #endif
-#ifndef MyAppProject
-  #error MyAppProject is not defined - run packaging\windows\build_installer.ps1
+#ifndef MyAppSlug
+  #error MyAppSlug is not defined - run packaging\windows\build_installer.ps1
 #endif
 #ifndef MyAppVersion
   #error MyAppVersion is not defined - run packaging\windows\build_installer.ps1
@@ -76,7 +76,7 @@ DefaultDirName={autopf}\{#MyCompany}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename={#MyAppProject}-{#MyAppVersion}-windows-x64
+OutputBaseFilename={#MyAppSlug}-{#MyAppVersion}-windows-x64
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible

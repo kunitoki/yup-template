@@ -3,8 +3,7 @@
 # Build a macOS installer package (.pkg).
 #
 # Collects every plugin format that was built (VST3, CLAP, AU component, LV2,
-# AAX)
-# plus every .app bundle (the standalone application and the plugin's standalone
+# AAX) plus every .app bundle (the standalone application and the plugin's standalone
 # application) and produces a single signed-or-unsigned installer that drops
 # each artifact into its standard macOS install location.
 #
@@ -61,12 +60,16 @@ stage_bundle() {
     FOUND+=("$ext")
 }
 
-stage_bundle vst3      "Library/Audio/Plug-Ins/VST3"
-stage_bundle clap      "Library/Audio/Plug-Ins/CLAP"
-stage_bundle component "Library/Audio/Plug-Ins/Components"
-stage_bundle lv2       "Library/Audio/Plug-Ins/LV2"
-stage_bundle aaxplugin "Library/Application Support/Avid/Audio/Plug-Ins"
-stage_bundle app       "Applications"
+# Only look for what the build was configured to produce. The applications are
+# found by extension, so a build without one of them simply has no bundle for it.
+if build_option_enabled BUILD_PLUGIN; then
+    build_option_enabled PLUGIN_BUILD_VST3 && stage_bundle vst3      "Library/Audio/Plug-Ins/VST3"
+    build_option_enabled PLUGIN_BUILD_CLAP && stage_bundle clap      "Library/Audio/Plug-Ins/CLAP"
+    build_option_enabled PLUGIN_BUILD_AU   && stage_bundle component "Library/Audio/Plug-Ins/Components"
+    build_option_enabled PLUGIN_BUILD_LV2  && stage_bundle lv2       "Library/Audio/Plug-Ins/LV2"
+    stage_bundle aaxplugin "Library/Application Support/Avid/Audio/Plug-Ins"
+fi
+stage_bundle app "Applications"
 
 [[ ${#FOUND[@]} -gt 0 ]] || die "No artifacts found under $BUILD_DIR for config $CONFIG. Build the project first."
 

@@ -67,14 +67,26 @@ as an artifact, but device installation still requires code signing.
 | Plugin standalone | `/Applications` | `/usr/bin` (+ `.desktop`) | `%ProgramFiles%\<Company>\<Product>` |
 
 The scripts glob the build tree by file extension, and look up the executables by their product name
-(`APP_PRODUCT_NAME` / `PLUGIN_PRODUCT_NAME`), so only what you actually built is included. Missing
-artifacts are skipped with a warning. The WebAssembly archive stages each application into its own
+(`APP_PRODUCT_NAME` / `PLUGIN_PRODUCT_NAME`), so only what you actually built is included. They read
+`BUILD_APP`, `BUILD_PLUGIN` and the `PLUGIN_BUILD_*` options from the `CMakeCache.txt` of the build
+folder and do not look for what was switched off; anything else that is missing is skipped with a
+warning. Only outputs of the requested configuration are taken, and the empty bundles CMake generates
+for targets that were never built (the AUv3 container application among them) are left out. The WebAssembly archive stages each application into its own
 folder, with a top-level `index.html` that opens the application (or the plugin's standalone when the
 application was not built).
 
 AAX is only built when the Avid SDK is available (`YUP_AAX_SDK_ROOT`). The installers ship the AAX
 bundle as built; Pro Tools release builds additionally need it signed with PACE's `wraptool` before
 packaging, which these scripts don't do.
+
+### Audio Units
+
+- **AU validation**: `auval` and pluginval only see installed components, so YUP validates the AU
+  only when `PLUGIN_COPY_AFTER_BUILD` is ON. CI configures with it OFF (nothing is installed on the
+  runner), so CLAP, VST3 and LV2 are validated there and AU is not: build once locally with the copy
+  on before a release.
+- **AUv3 is not shipped**: the `.appex` is built, but it can only be distributed inside a signed
+  container application, which the plugin target does not build. No script packages it.
 
 ## Requirements
 
@@ -89,7 +101,8 @@ Product naming is **inherited from `CMakeLists.txt`** — `common.sh` (bash) and
 (PowerShell) parse the project configuration block for `PROJECT_NAME`, `PRODUCT_NAME`,
 `PRODUCT_DESCRIPTION`, `COMPANY_NAME`, `BUNDLE_ID`, `PRODUCT_URL`, `PRODUCT_EMAIL`,
 `APP_PRODUCT_NAME`, `PLUGIN_PRODUCT_NAME` and `PLUGIN_DESCRIPTION`, and the version comes from the
-`VERSION` file. Nothing has to be kept in sync by hand: rename your product in CMake and every
+`VERSION` file. Every package is named after the product (`<Product-Name>-<version>-...`), and the
+Debian maintainer is `COMPANY_NAME <PRODUCT_EMAIL>`. Nothing has to be kept in sync by hand: rename your product in CMake and every
 installer follows.
 
 Override any value, plus the build/output locations, via environment variables:

@@ -64,5 +64,23 @@ $InstallerGuid = Get-ProjectValue "INSTALLER_GUID"
 # Version string read from the VERSION file.
 $Version = (Get-Content (Join-Path $ProjectRoot "VERSION") -Raw).Trim()
 
+# A filesystem-friendly product slug (no spaces), naming the installer like the
+# packages of every other platform.
+$ProductSlug = $ProductName -replace ' ', '-'
+
+# Read a boolean option (BUILD_APP, BUILD_PLUGIN, ...) from the CMake cache of a
+# build directory, so the scripts skip what the build switched off instead of
+# looking for it. True when the option is ON, and also when the cache or the
+# entry is missing: an unknown build is searched for everything.
+function Test-BuildOption([string]$BuildDir, [string]$Name) {
+    $cache = Join-Path $BuildDir "CMakeCache.txt"
+    if (-not (Test-Path $cache)) { return $true }
+
+    $match = Select-String -Path $cache -Pattern "^$([regex]::Escape($Name)):[A-Z]+=(.*)$" | Select-Object -First 1
+    if ($null -eq $match) { return $true }
+
+    return @("OFF", "0", "NO", "FALSE", "N") -notcontains $match.Matches[0].Groups[1].Value.Trim().ToUpperInvariant()
+}
+
 # Output directory for the finished installers.
 $DistDir = if ($env:DIST_DIR) { $env:DIST_DIR } else { Join-Path $ProjectRoot "dist" }

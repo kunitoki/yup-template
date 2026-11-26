@@ -77,14 +77,24 @@ function Stage-Artifact([string]$Pattern, [string]$SubDir, [string]$Define, [str
 
 # VST3 on Windows (SMTG default) is a single "<name>.vst3" DLL; with a bundle it
 # would be a directory. Copy-Item handles either form.
-Stage-Artifact "*_vst3_plugin.vst3" "VST3"       "HaveVst3"
-Stage-Artifact "*_clap_plugin.clap" "CLAP"       "HaveClap"
-Stage-Artifact "*_lv2_plugin.lv2"   "LV2"        "HaveLv2"
-# AAX is a "<name>.aaxplugin\Contents\x64\<name>.aaxplugin" directory bundle
-# that YUP writes straight into the build folder, outside any <Config> folder.
-Stage-Artifact "*_aax_plugin.aaxplugin" "AAX"    "HaveAax" "" $true
-Stage-Artifact "$AppProductName.exe"    "App"        "HaveApp"        "$AppProductName.exe"
-Stage-Artifact "$PluginProductName.exe" "Standalone" "HaveStandalone" "$PluginProductName.exe"
+# Only look for what the build was configured to produce.
+$BuildApp    = Test-BuildOption $BuildDir "BUILD_APP"
+$BuildPlugin = Test-BuildOption $BuildDir "BUILD_PLUGIN"
+
+if ($BuildPlugin) {
+    if (Test-BuildOption $BuildDir "PLUGIN_BUILD_VST3") { Stage-Artifact "*_vst3_plugin.vst3" "VST3" "HaveVst3" }
+    if (Test-BuildOption $BuildDir "PLUGIN_BUILD_CLAP") { Stage-Artifact "*_clap_plugin.clap" "CLAP" "HaveClap" }
+    if (Test-BuildOption $BuildDir "PLUGIN_BUILD_LV2")  { Stage-Artifact "*_lv2_plugin.lv2"   "LV2"  "HaveLv2" }
+    # AAX is a "<name>.aaxplugin\Contents\x64\<name>.aaxplugin" directory bundle
+    # that YUP writes straight into the build folder, outside any <Config> folder.
+    Stage-Artifact "*_aax_plugin.aaxplugin" "AAX" "HaveAax" "" $true
+    if (Test-BuildOption $BuildDir "PLUGIN_BUILD_STANDALONE") {
+        Stage-Artifact "$PluginProductName.exe" "Standalone" "HaveStandalone" "$PluginProductName.exe"
+    }
+}
+if ($BuildApp) {
+    Stage-Artifact "$AppProductName.exe" "App" "HaveApp" "$AppProductName.exe"
+}
 
 if ($staged.Count -eq 0) {
     throw "No artifacts found under '$BuildDir' for config '$Config'. Build the project first (e.g. 'just build')."
@@ -97,7 +107,7 @@ Write-Host "==> Building Windows installer $ProductName $Version ($Config)"
 $isccArgs = @(
     "/DMyAppId=$InstallerGuid",
     "/DMyAppName=$ProductName",
-    "/DMyAppProject=$ProjectName",
+    "/DMyAppSlug=$ProductSlug",
     "/DMyAppVersion=$Version",
     "/DMyCompany=$CompanyName",
     "/DMyAppURL=$ProductUrl",

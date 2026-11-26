@@ -5,17 +5,35 @@ on:
   push:
     paths:
       - ".gitmodules"
+      - "yup"
       - "CMakeLists.txt"
+      - "VERSION"
       - "**/workflows/build_macos.yml"
+      - "cmake/**"
       - "**/source/**"
       - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
       - "**/packaging/**"
-      - "VERSION"
     branches:
       - "**"
+  # Pull requests from forks get no push build, so they are built here.
+  pull_request:
+    paths:
+      - ".gitmodules"
+      - "yup"
+      - "CMakeLists.txt"
+      - "VERSION"
+      - "**/workflows/build_macos.yml"
+      - "cmake/**"
+      - "**/source/**"
+      - "**/tests/**"
+      - "**/benchmarks/**"
+      - "**/data/**"
+      - "**/packaging/**"
 
 concurrency:
-  group: build_macos-${{ github.workflow }}-${{ github.ref }}
+  group: build_macos-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -32,6 +50,8 @@ env:
 
 jobs:
   build:
+    # Branches of this repository are already built by the push event.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-latest
     steps:
     - name: Checkout
@@ -47,11 +67,18 @@ jobs:
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@v0.0.11
 
+    # The plugins are not installed into the user folders of the runner. AU is
+    # therefore not validated here: auval only sees installed components.
     - name: Configure
-      run: cmake ${{ github.workspace }} -G "Ninja Multi-Config" -B ${{ runner.workspace }}/build -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+      run: cmake ${{ github.workspace }} -G "Ninja Multi-Config" -B ${{ runner.workspace }}/build -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DPLUGIN_COPY_AFTER_BUILD=OFF
 
     - name: Build Debug
       run: cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}_all
+
+    - name: Test
+      run: |
+        cmake --build ${{ runner.workspace }}/build --config Debug --target ${{ env.PROJECT_NAME }}_tests
+        ctest --test-dir ${{ runner.workspace }}/build/tests -C Debug --output-on-failure
 
     - name: Build Release
       run: cmake --build ${{ runner.workspace }}/build --config Release --target ${{ env.PROJECT_NAME }}_all
